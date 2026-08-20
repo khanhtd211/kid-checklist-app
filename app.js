@@ -1,43 +1,79 @@
 /* ---------- Storage ---------- */
-const STORAGE_KEY = 'kidChecklistData_v1';
+const STORAGE_KEY = 'kidChecklistData_v2';
+const LEGACY_KEY = 'kidChecklistData_v1';
 const DAY_NAMES = ['CN','T2','T3','T4','T5','T6','T7'];
 const DAY_NAMES_FULL = ['Chủ nhật','Thứ 2','Thứ 3','Thứ 4','Thứ 5','Thứ 6','Thứ 7'];
+const AVATAR_CHOICES = ['🧒','👦','👧','👶','🐱','🐶','🦁','🐰','🦄','🐻','🐼','🦊'];
 
-function uid(){ return 't' + Math.random().toString(36).slice(2,9); }
+function uid(prefix){ return (prefix||'t') + Math.random().toString(36).slice(2,9); }
 
-function defaultState(){
+function defaultTasks(){
+  return [
+    { id: uid(), title: 'Đánh răng buổi sáng', emoji: '🪥', days:[0,1,2,3,4,5,6] },
+    { id: uid(), title: 'Dọn giường', emoji: '🛏️', days:[0,1,2,3,4,5,6] },
+    { id: uid(), title: 'Làm bài tập', emoji: '📚', days:[1,2,3,4,5] },
+    { id: uid(), title: 'Đọc sách 15 phút', emoji: '📖', days:[0,1,2,3,4,5,6] },
+  ];
+}
+function defaultRewards(){
+  return [
+    { id: uid(), threshold: 5, title: 'Xem phim hoạt hình', emoji: '🎬' },
+    { id: uid(), threshold: 15, title: 'Đi công viên', emoji: '🎡' },
+    { id: uid(), threshold: 30, title: 'Mua đồ chơi nhỏ', emoji: '🧸' },
+  ];
+}
+function newProfile(name, avatar){
   return {
-    childName: 'Con',
-    tasks: [
-      { id: uid(), title: 'Đánh răng buổi sáng', emoji: '🪥', days:[0,1,2,3,4,5,6] },
-      { id: uid(), title: 'Dọn giường', emoji: '🛏️', days:[0,1,2,3,4,5,6] },
-      { id: uid(), title: 'Làm bài tập', emoji: '📚', days:[1,2,3,4,5] },
-      { id: uid(), title: 'Đọc sách 15 phút', emoji: '📖', days:[0,1,2,3,4,5,6] },
-    ],
-    rewards: [
-      { id: uid(), threshold: 5, title: 'Xem phim hoạt hình', emoji: '🎬' },
-      { id: uid(), threshold: 15, title: 'Đi công viên', emoji: '🎡' },
-      { id: uid(), threshold: 30, title: 'Mua đồ chơi nhỏ', emoji: '🧸' },
-    ],
+    id: uid('p'),
+    name: name || 'Bé',
+    avatar: avatar || AVATAR_CHOICES[0],
+    tasks: defaultTasks(),
+    rewards: defaultRewards(),
     logs: {},      // { 'YYYY-MM-DD': { taskId: true } }
-    starDays: {},  // { 'YYYY-MM-DD': true }  -> a star was earned that day
+    starDays: {},  // { 'YYYY-MM-DD': true } -> a star was earned that day
     stars: 0,
-    claimedRewardIds: [],
   };
 }
-
-function loadState(){
-  try{
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if(!raw) return defaultState();
-    const parsed = JSON.parse(raw);
-    return Object.assign(defaultState(), parsed);
-  }catch(e){ return defaultState(); }
+function defaultAppData(){
+  const p = newProfile('Bé 1', '🧒');
+  return { profiles: [p], activeProfileId: p.id };
 }
 
-function saveState(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
+function loadAppData(){
+  try{
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if(raw){
+      const parsed = JSON.parse(raw);
+      if(parsed && Array.isArray(parsed.profiles) && parsed.profiles.length){
+        return parsed;
+      }
+    }
+    // Migrate from old single-profile schema if present
+    const legacyRaw = localStorage.getItem(LEGACY_KEY);
+    if(legacyRaw){
+      const l = JSON.parse(legacyRaw);
+      const p = {
+        id: uid('p'),
+        name: l.childName || 'Bé 1',
+        avatar: '🧒',
+        tasks: l.tasks || defaultTasks(),
+        rewards: l.rewards || defaultRewards(),
+        logs: l.logs || {},
+        starDays: l.starDays || {},
+        stars: l.stars || 0,
+      };
+      return { profiles: [p], activeProfileId: p.id };
+    }
+    return defaultAppData();
+  }catch(e){ return defaultAppData(); }
+}
 
-let state = loadState();
+function saveAppData(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(appData)); }
+
+let appData = loadAppData();
+
+function getProfile(id){ return appData.profiles.find(p=>p.id===id); }
+function activeProfile(){ return getProfile(appData.activeProfileId) || appData.profiles[0]; }
 
 /* ---------- Date helpers ---------- */
 function pad(n){ return n<10?'0'+n:''+n; }
@@ -55,18 +91,20 @@ function fmtHuman(d){
   return `${DAY_NAMES_FULL[weekdayOf(d)]}, ${pad(d.getDate())}/${pad(d.getMonth()+1)}`;
 }
 
-/* ---------- Core logic ---------- */
+/* ---------- Core logic (scoped to active profile) ---------- */
 function tasksForDate(d){
   const wd = weekdayOf(d);
-  return state.tasks.filter(t => t.days.includes(wd));
+  return activeProfile().tasks.filter(t => t.days.includes(wd));
 }
 function isDone(dateKey, taskId){
-  return !!(state.logs[dateKey] && state.logs[dateKey][taskId]);
+  const p = activeProfile();
+  return !!(p.logs[dateKey] && p.logs[dateKey][taskId]);
 }
 function setDone(dateKey, taskId, val){
-  if(!state.logs[dateKey]) state.logs[dateKey] = {};
-  if(val) state.logs[dateKey][taskId] = true;
-  else delete state.logs[dateKey][taskId];
+  const p = activeProfile();
+  if(!p.logs[dateKey]) p.logs[dateKey] = {};
+  if(val) p.logs[dateKey][taskId] = true;
+  else delete p.logs[dateKey][taskId];
 }
 function progressFor(d){
   const key = toKey(d);
@@ -75,40 +113,43 @@ function progressFor(d){
   return { done, total: list.length };
 }
 function nextReward(){
-  const sorted = [...state.rewards].sort((a,b)=>a.threshold-b.threshold);
-  return sorted.find(r => state.stars < r.threshold) || null;
+  const p = activeProfile();
+  const sorted = [...p.rewards].sort((a,b)=>a.threshold-b.threshold);
+  return sorted.find(r => p.stars < r.threshold) || null;
 }
 
 function toggleTask(taskId){
+  const p = activeProfile();
   const key = todayKey();
   const wasDone = isDone(key, taskId);
   setDone(key, taskId, !wasDone);
   const { done, total } = progressFor(todayDate());
-  const hadStarBefore = !!state.starDays[key];
+  const hadStarBefore = !!p.starDays[key];
   if(total > 0 && done === total && !hadStarBefore){
-    state.starDays[key] = true;
-    state.stars += 1;
-    saveState();
+    p.starDays[key] = true;
+    p.stars += 1;
+    saveAppData();
     renderAll();
     celebrate();
   } else if(hadStarBefore && !(total>0 && done===total)){
     // un-did a task after already earning the star today -> revoke
-    delete state.starDays[key];
-    state.stars = Math.max(0, state.stars - 1);
-    saveState();
+    delete p.starDays[key];
+    p.stars = Math.max(0, p.stars - 1);
+    saveAppData();
     renderAll();
   } else {
-    saveState();
+    saveAppData();
     renderAll();
   }
 }
 
 function celebrate(){
+  const p = activeProfile();
   const nr = nextReward();
   const modal = document.getElementById('celebrateModal');
   const msg = document.getElementById('celebrateMsg');
-  msg.innerHTML = `Con vừa hoàn thành hết việc hôm nay!<br><b>+1 ⭐ (tổng ${state.stars} sao)</b>` +
-    (nr ? `<br><span style="font-size:13px;color:var(--muted)">Còn ${Math.max(0, nr.threshold-state.stars)} sao nữa để nhận "${nr.emoji} ${nr.title}"</span>` : `<br><span style="font-size:13px;color:var(--muted)">Con đã đạt hết các mốc thưởng! 🎉</span>`);
+  msg.innerHTML = `${escapeHtml(p.name)} vừa hoàn thành hết việc hôm nay!<br><b>+1 ⭐ (tổng ${p.stars} sao)</b>` +
+    (nr ? `<br><span style="font-size:13px;color:var(--muted)">Còn ${Math.max(0, nr.threshold-p.stars)} sao nữa để nhận "${nr.emoji} ${nr.title}"</span>` : `<br><span style="font-size:13px;color:var(--muted)">Đã đạt hết các mốc thưởng! 🎉</span>`);
   modal.classList.add('open');
   spawnConfetti();
 }
@@ -130,8 +171,11 @@ function spawnConfetti(){
 
 /* ---------- Render: Today ---------- */
 function renderToday(){
+  const p = activeProfile();
   document.getElementById('todayDate').textContent = fmtHuman(todayDate());
-  document.getElementById('starsBadge').textContent = `⭐ ${state.stars}`;
+  document.getElementById('starsBadge').textContent = `⭐ ${p.stars}`;
+  document.getElementById('greetText').textContent = `Chào ${p.name}! 👋`;
+  document.getElementById('switchAvatarToday').textContent = p.avatar;
 
   const list = tasksForDate(todayDate());
   const key = todayKey();
@@ -144,9 +188,9 @@ function renderToday(){
   const nr = nextReward();
   const nextRewardBox = document.getElementById('nextRewardBox');
   if(nr){
-    nextRewardBox.innerHTML = `🎯 Còn <b>${Math.max(0, nr.threshold-state.stars)} sao</b> nữa để nhận <b>${nr.emoji} ${nr.title}</b>`;
-  } else if(state.rewards.length){
-    nextRewardBox.innerHTML = `🏆 Con đã đạt hết các mốc thưởng hiện có!`;
+    nextRewardBox.innerHTML = `🎯 Còn <b>${Math.max(0, nr.threshold-p.stars)} sao</b> nữa để nhận <b>${nr.emoji} ${nr.title}</b>`;
+  } else if(p.rewards.length){
+    nextRewardBox.innerHTML = `🏆 Đã đạt hết các mốc thưởng hiện có!`;
   } else {
     nextRewardBox.innerHTML = `Chưa có mốc thưởng nào. Vào mục Cài đặt để thêm nhé!`;
   }
@@ -185,6 +229,8 @@ function escapeHtml(s){
 
 /* ---------- Render: Stats ---------- */
 function renderStats(){
+  const p = activeProfile();
+  document.getElementById('statsProfileName').textContent = `Thống kê tuần của ${p.name} ${p.avatar}`;
   const today = todayDate();
   const weekStart = startOfWeek(today);
   const weekDays = [0,1,2,3,4,5,6].map(i => addDays(weekStart, i));
@@ -195,7 +241,7 @@ function renderStats(){
 
   const tbody = document.getElementById('weekBody');
   tbody.innerHTML = '';
-  state.tasks.forEach(t=>{
+  p.tasks.forEach(t=>{
     const tr = document.createElement('tr');
     let cells = `<td class="taskname">${t.emoji} ${escapeHtml(t.title)}</td>`;
     weekDays.forEach(d=>{
@@ -235,7 +281,7 @@ function renderStats(){
 
   // Việc còn thiếu trong tuần: per task, count of scheduled-but-missed days up to today
   const missTasksEl = document.getElementById('missTasks');
-  const rows = state.tasks.map(t=>{
+  const rows = p.tasks.map(t=>{
     let missed = 0;
     weekDays.filter(d=>d<=today).forEach(d=>{
       const wd = weekdayOf(d);
@@ -252,7 +298,7 @@ function renderStats(){
     `).join('');
   }
 
-  document.getElementById('statsStars').textContent = `⭐ ${state.stars}`;
+  document.getElementById('statsStars').textContent = `⭐ ${p.stars}`;
 }
 
 /* ---------- Render: Settings ---------- */
@@ -260,10 +306,12 @@ const EMOJI_CHOICES_TASK = ['🪥','🛏️','📚','📖','🧹','🍎','🚿',
 const EMOJI_CHOICES_REWARD = ['🎬','🎡','🧸','🍦','🍕','🎮','🚲','🎪','📱','🏊','🎨','🍭'];
 
 function renderSettings(){
-  document.getElementById('childNameInput').value = state.childName;
+  const p = activeProfile();
+  document.getElementById('settingsProfileLabel').textContent = `Đang chỉnh sửa cho: ${p.avatar} ${p.name}`;
+  document.getElementById('childNameInput').value = p.name;
 
   const taskListEl = document.getElementById('settingsTaskList');
-  taskListEl.innerHTML = state.tasks.map(t=>`
+  taskListEl.innerHTML = p.tasks.map(t=>`
     <div class="list-item">
       <div class="emoji">${t.emoji}</div>
       <div class="info">
@@ -276,7 +324,7 @@ function renderSettings(){
   `).join('') || `<div class="empty-state">Chưa có việc nào.</div>`;
 
   const rewardListEl = document.getElementById('settingsRewardList');
-  rewardListEl.innerHTML = [...state.rewards].sort((a,b)=>a.threshold-b.threshold).map(r=>`
+  rewardListEl.innerHTML = [...p.rewards].sort((a,b)=>a.threshold-b.threshold).map(r=>`
     <div class="list-item">
       <div class="emoji">${r.emoji}</div>
       <div class="info">
@@ -291,20 +339,23 @@ function renderSettings(){
 
 function deleteTask(id){
   if(!confirm('Xoá việc này?')) return;
-  state.tasks = state.tasks.filter(t=>t.id!==id);
-  saveState(); renderAll();
+  const p = activeProfile();
+  p.tasks = p.tasks.filter(t=>t.id!==id);
+  saveAppData(); renderAll();
 }
 function deleteReward(id){
   if(!confirm('Xoá mốc thưởng này?')) return;
-  state.rewards = state.rewards.filter(r=>r.id!==id);
-  saveState(); renderAll();
+  const p = activeProfile();
+  p.rewards = p.rewards.filter(r=>r.id!==id);
+  saveAppData(); renderAll();
 }
 
 /* ---------- Task modal ---------- */
 let editingTaskId = null;
 function openTaskModal(id){
   editingTaskId = id || null;
-  const t = id ? state.tasks.find(x=>x.id===id) : { title:'', emoji:EMOJI_CHOICES_TASK[0], days:[0,1,2,3,4,5,6] };
+  const p = activeProfile();
+  const t = id ? p.tasks.find(x=>x.id===id) : { title:'', emoji:EMOJI_CHOICES_TASK[0], days:[0,1,2,3,4,5,6] };
   document.getElementById('taskModalTitle').textContent = id ? 'Sửa việc' : 'Thêm việc mới';
   document.getElementById('taskTitleInput').value = t.title;
   renderEmojiPicker('taskEmojiPicker', EMOJI_CHOICES_TASK, t.emoji, 'taskEmojiInput');
@@ -340,13 +391,14 @@ function saveTaskModal(){
   const days = [...document.querySelectorAll('#daysRow .day-chip.on')].map(c=>parseInt(c.dataset.day,10));
   if(days.length===0){ alert('Chọn ít nhất 1 ngày trong tuần!'); return; }
 
+  const p = activeProfile();
   if(editingTaskId){
-    const t = state.tasks.find(x=>x.id===editingTaskId);
+    const t = p.tasks.find(x=>x.id===editingTaskId);
     t.title = title; t.emoji = emoji; t.days = days;
   } else {
-    state.tasks.push({ id: uid(), title, emoji, days });
+    p.tasks.push({ id: uid(), title, emoji, days });
   }
-  saveState();
+  saveAppData();
   closeTaskModal();
   renderAll();
 }
@@ -355,7 +407,8 @@ function saveTaskModal(){
 let editingRewardId = null;
 function openRewardModal(id){
   editingRewardId = id || null;
-  const r = id ? state.rewards.find(x=>x.id===id) : { title:'', emoji:EMOJI_CHOICES_REWARD[0], threshold:5 };
+  const p = activeProfile();
+  const r = id ? p.rewards.find(x=>x.id===id) : { title:'', emoji:EMOJI_CHOICES_REWARD[0], threshold:5 };
   document.getElementById('rewardModalTitle').textContent = id ? 'Sửa phần thưởng' : 'Thêm phần thưởng';
   document.getElementById('rewardTitleInput').value = r.title;
   document.getElementById('rewardThresholdInput').value = r.threshold;
@@ -371,15 +424,92 @@ function saveRewardModal(){
   if(!threshold || threshold<1){ alert('Nhập số sao hợp lệ!'); return; }
   const emoji = document.getElementById('rewardEmojiInput').value || EMOJI_CHOICES_REWARD[0];
 
+  const p = activeProfile();
   if(editingRewardId){
-    const r = state.rewards.find(x=>x.id===editingRewardId);
+    const r = p.rewards.find(x=>x.id===editingRewardId);
     r.title = title; r.threshold = threshold; r.emoji = emoji;
   } else {
-    state.rewards.push({ id: uid(), title, threshold, emoji });
+    p.rewards.push({ id: uid(), title, threshold, emoji });
   }
-  saveState();
+  saveAppData();
   closeRewardModal();
   renderAll();
+}
+
+/* ---------- Profile picker ---------- */
+function renderPicker(){
+  const grid = document.getElementById('profileGrid');
+  grid.innerHTML = appData.profiles.map(p=>`
+    <div class="profile-tile" data-id="${p.id}">
+      <button type="button" class="profile-tile-main" data-id="${p.id}">
+        <div class="profile-avatar">${p.avatar}</div>
+        <div class="profile-name">${escapeHtml(p.name)}</div>
+        <div class="profile-stars">⭐ ${p.stars}</div>
+      </button>
+      <button type="button" class="profile-edit-btn" data-id="${p.id}">✏️</button>
+      ${appData.profiles.length>1 ? `<button type="button" class="profile-del-btn" data-id="${p.id}">🗑️</button>` : ''}
+    </div>
+  `).join('') + `
+    <button type="button" class="profile-tile add-tile" id="addProfileTile">
+      <div class="profile-avatar">➕</div>
+      <div class="profile-name">Thêm bé</div>
+    </button>
+  `;
+
+  grid.querySelectorAll('.profile-tile-main').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      appData.activeProfileId = btn.dataset.id;
+      saveAppData();
+      switchTab('today');
+    });
+  });
+  grid.querySelectorAll('.profile-edit-btn').forEach(btn=>{
+    btn.addEventListener('click', (e)=>{ e.stopPropagation(); openProfileModal(btn.dataset.id); });
+  });
+  grid.querySelectorAll('.profile-del-btn').forEach(btn=>{
+    btn.addEventListener('click', (e)=>{
+      e.stopPropagation();
+      const p = getProfile(btn.dataset.id);
+      if(!confirm(`Xoá hồ sơ của "${p.name}"? Toàn bộ dữ liệu (việc, sao, thống kê) sẽ mất.`)) return;
+      appData.profiles = appData.profiles.filter(x=>x.id!==btn.dataset.id);
+      if(appData.activeProfileId === btn.dataset.id){
+        appData.activeProfileId = appData.profiles[0].id;
+      }
+      saveAppData();
+      renderPicker();
+    });
+  });
+  document.getElementById('addProfileTile').addEventListener('click', ()=> openProfileModal(null));
+}
+
+let editingProfileId = null;
+function openProfileModal(id){
+  editingProfileId = id || null;
+  const p = id ? getProfile(id) : { name:'', avatar: AVATAR_CHOICES[appData.profiles.length % AVATAR_CHOICES.length] };
+  document.getElementById('profileModalTitle').textContent = id ? 'Sửa hồ sơ' : 'Thêm bé mới';
+  document.getElementById('profileNameInput').value = p.name;
+  renderEmojiPicker('profileAvatarPicker', AVATAR_CHOICES, p.avatar, 'profileAvatarInput');
+  document.getElementById('profileAvatarInput').value = p.avatar;
+  document.getElementById('profileModal').classList.add('open');
+}
+function closeProfileModal(){ document.getElementById('profileModal').classList.remove('open'); }
+function saveProfileModal(){
+  const name = document.getElementById('profileNameInput').value.trim();
+  if(!name){ alert('Nhập tên bé nhé!'); return; }
+  const avatar = document.getElementById('profileAvatarInput').value || AVATAR_CHOICES[0];
+
+  if(editingProfileId){
+    const p = getProfile(editingProfileId);
+    p.name = name; p.avatar = avatar;
+  } else {
+    const p = newProfile(name, avatar);
+    appData.profiles.push(p);
+    appData.activeProfileId = p.id;
+  }
+  saveAppData();
+  closeProfileModal();
+  renderPicker();
+  if(document.getElementById('page-picker').classList.contains('active')) renderPicker();
 }
 
 /* ---------- Tabs ---------- */
@@ -387,8 +517,11 @@ function switchTab(name){
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.getElementById('page-'+name).classList.add('active');
   document.querySelectorAll('.tabbar button').forEach(b=>b.classList.toggle('active', b.dataset.tab===name));
+  document.getElementById('tabbar').style.display = (name==='picker') ? 'none' : 'flex';
+  if(name==='today') renderToday();
   if(name==='stats') renderStats();
   if(name==='settings') renderSettings();
+  if(name==='picker') renderPicker();
 }
 
 /* ---------- Init ---------- */
@@ -397,6 +530,7 @@ function renderAll(){
   const activePage = document.querySelector('.page.active');
   if(activePage && activePage.id === 'page-stats') renderStats();
   if(activePage && activePage.id === 'page-settings') renderSettings();
+  if(activePage && activePage.id === 'page-picker') renderPicker();
 }
 
 document.addEventListener('DOMContentLoaded', ()=>{
@@ -406,9 +540,12 @@ document.addEventListener('DOMContentLoaded', ()=>{
     b.addEventListener('click', ()=> switchTab(b.dataset.tab));
   });
 
+  document.getElementById('switchAvatarToday').addEventListener('click', ()=> switchTab('picker'));
+  document.getElementById('backFromPicker').addEventListener('click', ()=> switchTab('today'));
+
   document.getElementById('childNameInput').addEventListener('change', (e)=>{
-    state.childName = e.target.value.trim() || 'Con';
-    saveState();
+    activeProfile().name = e.target.value.trim() || 'Bé';
+    saveAppData();
   });
 
   document.getElementById('addTaskBtn').addEventListener('click', ()=>openTaskModal(null));
@@ -417,6 +554,8 @@ document.addEventListener('DOMContentLoaded', ()=>{
   document.getElementById('taskSaveBtn').addEventListener('click', saveTaskModal);
   document.getElementById('rewardCancelBtn').addEventListener('click', closeRewardModal);
   document.getElementById('rewardSaveBtn').addEventListener('click', saveRewardModal);
+  document.getElementById('profileCancelBtn').addEventListener('click', closeProfileModal);
+  document.getElementById('profileSaveBtn').addEventListener('click', saveProfileModal);
   document.getElementById('celebrateCloseBtn').addEventListener('click', ()=>{
     document.getElementById('celebrateModal').classList.remove('open');
   });

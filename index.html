@@ -16,11 +16,21 @@
 
 <div class="app">
 
+  <!-- PROFILE PICKER -->
+  <div class="page" id="page-picker">
+    <div class="topbar">
+      <div class="greet">Ai đang dùng app? 🙋</div>
+      <button class="icon-btn" id="backFromPicker">✕</button>
+    </div>
+    <div class="profile-grid" id="profileGrid"></div>
+  </div>
+
   <!-- TODAY -->
   <div class="page active" id="page-today">
     <div class="topbar">
-      <div>
-        <div class="greet">Chào bạn nhỏ! 👋</div>
+      <button class="avatar-btn" id="switchAvatarToday" title="Đổi bé"></button>
+      <div class="topbar-mid">
+        <div class="greet" id="greetText">Chào bạn nhỏ! 👋</div>
         <div class="date" id="todayDate"></div>
       </div>
       <div class="stars-badge" id="starsBadge">⭐ 0</div>
@@ -47,7 +57,7 @@
   <!-- STATS -->
   <div class="page" id="page-stats">
     <div class="topbar">
-      <div class="greet">Thống kê tuần này</div>
+      <div class="greet" id="statsProfileName">Thống kê tuần này</div>
       <div class="stars-badge" id="statsStars">⭐ 0</div>
     </div>
 
@@ -79,9 +89,10 @@
     </div>
 
     <div class="card">
+      <div class="settings-profile-label" id="settingsProfileLabel"></div>
       <div class="field" style="margin-bottom:0">
-        <label>Tên con</label>
-        <input type="text" id="childNameInput" placeholder="Tên con">
+        <label>Tên bé</label>
+        <input type="text" id="childNameInput" placeholder="Tên bé">
       </div>
     </div>
 
@@ -100,7 +111,7 @@
 
 </div>
 
-<div class="tabbar">
+<div class="tabbar" id="tabbar">
   <button class="active" data-tab="today"><span class="icon">✅</span>Hôm nay</button>
   <button data-tab="stats"><span class="icon">📊</span>Thống kê</button>
   <button data-tab="settings"><span class="icon">⚙️</span>Cài đặt</button>
@@ -150,6 +161,26 @@
     <div class="sheet-actions">
       <button class="btn-secondary" id="rewardCancelBtn">Huỷ</button>
       <button class="btn-primary" id="rewardSaveBtn">Lưu</button>
+    </div>
+  </div>
+</div>
+
+<!-- Profile modal -->
+<div class="overlay" id="profileModal">
+  <div class="sheet">
+    <h3 id="profileModalTitle">Thêm bé mới</h3>
+    <div class="field">
+      <label>Tên bé</label>
+      <input type="text" id="profileNameInput" placeholder="VD: Bin">
+    </div>
+    <div class="field">
+      <label>Avatar</label>
+      <div class="emoji-picker" id="profileAvatarPicker"></div>
+      <input type="hidden" id="profileAvatarInput">
+    </div>
+    <div class="sheet-actions">
+      <button class="btn-secondary" id="profileCancelBtn">Huỷ</button>
+      <button class="btn-primary" id="profileSaveBtn">Lưu</button>
     </div>
   </div>
 </div>
