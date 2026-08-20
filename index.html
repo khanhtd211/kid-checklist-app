@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<title>Checklist Của Con</title>
+<meta name="theme-color" content="#ff8fa3">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Checklist">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="manifest" href="manifest.json">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="app">
+
+  <!-- TODAY -->
+  <div class="page active" id="page-today">
+    <div class="topbar">
+      <div>
+        <div class="greet">Chào bạn nhỏ! 👋</div>
+        <div class="date" id="todayDate"></div>
+      </div>
+      <div class="stars-badge" id="starsBadge">⭐ 0</div>
+    </div>
+
+    <div class="progress-wrap">
+      <div class="progress-label">
+        <span id="progressLabel">0/0 việc đã xong</span>
+        <span id="progressPct">0%</span>
+      </div>
+      <div class="progress-track"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
+    </div>
+
+    <div class="reward-card" id="doneCard" style="display:none">
+      <div class="title">🎉 Xong hết việc hôm nay rồi!</div>
+      <div>Con thật tuyệt vời!</div>
+    </div>
+
+    <div class="next-reward" id="nextRewardBox"></div>
+
+    <div id="taskList"></div>
+  </div>
+
+  <!-- STATS -->
+  <div class="page" id="page-stats">
+    <div class="topbar">
+      <div class="greet">Thống kê tuần này</div>
+      <div class="stars-badge" id="statsStars">⭐ 0</div>
+    </div>
+
+    <div class="card">
+      <div class="section-title">📅 Bảng theo dõi tuần</div>
+      <div style="overflow-x:auto">
+        <table class="week-grid">
+          <thead><tr id="weekHead"></tr></thead>
+          <tbody id="weekBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="section-title">😥 Ngày chưa đạt (tuần này)</div>
+      <div id="missDays"></div>
+    </div>
+
+    <div class="card">
+      <div class="section-title">📝 Việc còn thiếu trong tuần</div>
+      <div id="missTasks"></div>
+    </div>
+  </div>
+
+  <!-- SETTINGS -->
+  <div class="page" id="page-settings">
+    <div class="topbar">
+      <div class="greet">Cài đặt (Ba/Mẹ)</div>
+    </div>
+
+    <div class="card">
+      <div class="field" style="margin-bottom:0">
+        <label>Tên con</label>
+        <input type="text" id="childNameInput" placeholder="Tên con">
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="section-title">✅ Danh sách việc cần làm</div>
+      <div id="settingsTaskList"></div>
+      <button class="add-btn" id="addTaskBtn">+ Thêm việc</button>
+    </div>
+
+    <div class="card">
+      <div class="section-title">🏆 Mốc thưởng theo số sao</div>
+      <div id="settingsRewardList"></div>
+      <button class="add-btn" id="addRewardBtn">+ Thêm mốc thưởng</button>
+    </div>
+  </div>
+
+</div>
+
+<div class="tabbar">
+  <button class="active" data-tab="today"><span class="icon">✅</span>Hôm nay</button>
+  <button data-tab="stats"><span class="icon">📊</span>Thống kê</button>
+  <button data-tab="settings"><span class="icon">⚙️</span>Cài đặt</button>
+</div>
+
+<!-- Task modal -->
+<div class="overlay" id="taskModal">
+  <div class="sheet">
+    <h3 id="taskModalTitle">Thêm việc mới</h3>
+    <div class="field">
+      <label>Tên việc</label>
+      <input type="text" id="taskTitleInput" placeholder="VD: Đánh răng">
+    </div>
+    <div class="field">
+      <label>Biểu tượng</label>
+      <div class="emoji-picker" id="taskEmojiPicker"></div>
+      <input type="hidden" id="taskEmojiInput">
+    </div>
+    <div class="field">
+      <label>Áp dụng vào ngày nào</label>
+      <div class="days-row" id="daysRow"></div>
+    </div>
+    <div class="sheet-actions">
+      <button class="btn-secondary" id="taskCancelBtn">Huỷ</button>
+      <button class="btn-primary" id="taskSaveBtn">Lưu</button>
+    </div>
+  </div>
+</div>
+
+<!-- Reward modal -->
+<div class="overlay" id="rewardModal">
+  <div class="sheet">
+    <h3 id="rewardModalTitle">Thêm phần thưởng</h3>
+    <div class="field">
+      <label>Tên phần thưởng</label>
+      <input type="text" id="rewardTitleInput" placeholder="VD: Đi công viên">
+    </div>
+    <div class="field">
+      <label>Biểu tượng</label>
+      <div class="emoji-picker" id="rewardEmojiPicker"></div>
+      <input type="hidden" id="rewardEmojiInput">
+    </div>
+    <div class="field">
+      <label>Cần đạt bao nhiêu sao ⭐</label>
+      <input type="text" inputmode="numeric" id="rewardThresholdInput" placeholder="VD: 10">
+    </div>
+    <div class="sheet-actions">
+      <button class="btn-secondary" id="rewardCancelBtn">Huỷ</button>
+      <button class="btn-primary" id="rewardSaveBtn">Lưu</button>
+    </div>
+  </div>
+</div>
+
+<!-- Celebrate modal -->
+<div class="overlay" id="celebrateModal">
+  <div class="sheet" style="text-align:center">
+    <div style="font-size:56px">🎉</div>
+    <h3>Chúc mừng!</h3>
+    <p id="celebrateMsg" style="font-size:16px;line-height:1.6"></p>
+    <div class="sheet-actions">
+      <button class="btn-primary" id="celebrateCloseBtn" style="width:100%">Tuyệt vời!</button>
+    </div>
+  </div>
+</div>
+
+<div class="confetti-overlay" id="confettiWrap"></div>
+
+<script src="app.js"></script>
+</body>
+</html>
