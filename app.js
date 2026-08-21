@@ -3,13 +3,20 @@ const STORAGE_KEY = 'kidChecklistData_v2';
 const LEGACY_KEY = 'kidChecklistData_v1';
 const DAY_NAMES = ['CN','T2','T3','T4','T5','T6','T7'];
 const DAY_NAMES_FULL = ['Chủ nhật','Thứ 2','Thứ 3','Thứ 4','Thứ 5','Thứ 6','Thứ 7'];
-const AVATAR_CHOICES = ['🧒','👦','👧','👶','🐱','🐶','🦁','🐰','🦄','🐻','🐼','🦊'];
+const AVATAR_CHOICES = ['🧒','👦','👧','👶','🐱','🐶','🦁','🐰','🦄','🐻','🐼','🦊','🐸','🐵','🐹','🐨','🐷','🦖','🦕','🐙','🦋','🐢','🤖','🥷'];
 const GIFT_REASONS = [
   { emoji:'🎓', text:'Đạt điểm cao' },
   { emoji:'🧹', text:'Làm việc nhà' },
   { emoji:'🤝', text:'Giúp đỡ người khác' },
   { emoji:'💖', text:'Ngoan, lễ phép' },
   { emoji:'🎁', text:'Khác' },
+];
+const DEDUCT_REASONS = [
+  { emoji:'😤', text:'Không nghe lời' },
+  { emoji:'🤥', text:'Nói dối' },
+  { emoji:'😠', text:'Cãi lại, vô lễ' },
+  { emoji:'👊', text:'Đánh/cắn bạn' },
+  { emoji:'⚠️', text:'Khác' },
 ];
 
 function uid(prefix){ return (prefix||'t') + Math.random().toString(36).slice(2,9); }
@@ -36,10 +43,10 @@ function newProfile(name, avatar){
     avatar: avatar || AVATAR_CHOICES[0],
     tasks: defaultTasks(),
     rewards: defaultRewards(),
-    logs: {},      // { 'YYYY-MM-DD': { taskId: true } }
-    starDays: {},  // { 'YYYY-MM-DD': true } -> a star was earned that day
+    logs: {},        // { 'YYYY-MM-DD': { taskId: true } }
+    starDays: {},    // { 'YYYY-MM-DD': true } -> a star was earned that day
     stars: 0,
-    giftLogs: [],  // [{ id, dateKey, reason, emoji, amount, at }] -> stars gifted by parent
+    starHistory: [], // [{ id, type:'complete'|'gift', dateKey, amount, reason, emoji, at }]
   };
 }
 function defaultAppData(){
@@ -69,7 +76,7 @@ function loadAppData(){
         logs: l.logs || {},
         starDays: l.starDays || {},
         stars: l.stars || 0,
-        giftLogs: [],
+        starHistory: [],
       };
       return { profiles: [p], activeProfileId: p.id, parentPin: null };
     }
@@ -80,9 +87,24 @@ function loadAppData(){
 function saveAppData(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(appData)); }
 
 let appData = loadAppData();
-// Migrate/normalize fields for data saved before the PIN & gift-star feature existed
+// Migrate/normalize fields for data saved before the PIN & star-history feature existed
 if(typeof appData.parentPin === 'undefined') appData.parentPin = null;
-(appData.profiles || []).forEach(p=>{ if(!Array.isArray(p.giftLogs)) p.giftLogs = []; });
+(appData.profiles || []).forEach(p=>{
+  if(!Array.isArray(p.starHistory)){
+    const hist = [];
+    Object.keys(p.starDays || {}).forEach(dateKey=>{
+      if(p.starDays[dateKey]){
+        const ts = new Date(dateKey + 'T12:00:00').getTime();
+        hist.push({ id: uid('h'), type:'complete', dateKey, amount:1, reason:'Hoàn thành hết việc trong ngày', emoji:'✅', at: isNaN(ts) ? Date.now() : ts });
+      }
+    });
+    (p.giftLogs || []).forEach(g=>{
+      hist.push({ id: g.id || uid('h'), type:'gift', dateKey: g.dateKey, amount: g.amount, reason: g.reason, emoji: g.emoji || '🌟', at: g.at || Date.now() });
+    });
+    hist.sort((a,b)=>(b.at||0)-(a.at||0));
+    p.starHistory = hist;
+  }
+});
 
 function getProfile(id){ return appData.profiles.find(p=>p.id===id); }
 function activeProfile(){ return getProfile(appData.activeProfileId) || appData.profiles[0]; }
@@ -130,6 +152,16 @@ function nextReward(p){
   return sorted.find(r => p.stars < r.threshold) || null;
 }
 
+function addStarHistory(p, entry){
+  p.starHistory = p.starHistory || [];
+  p.starHistory.unshift(Object.assign({ id: uid('h'), at: Date.now() }, entry));
+}
+function removeCompleteStarHistory(p, dateKey){
+  p.starHistory = p.starHistory || [];
+  const idx = p.starHistory.findIndex(h=>h.type==='complete' && h.dateKey===dateKey);
+  if(idx > -1) p.starHistory.splice(idx, 1);
+}
+
 function toggleTask(taskId){
   const p = activeProfile();
   const key = todayKey();
@@ -140,6 +172,7 @@ function toggleTask(taskId){
   if(total > 0 && done === total && !hadStarBefore){
     p.starDays[key] = true;
     p.stars += 1;
+    addStarHistory(p, { type:'complete', dateKey:key, amount:1, reason:'Hoàn thành hết việc trong ngày', emoji:'✅' });
     saveAppData();
     renderAll();
     celebrate();
@@ -147,6 +180,7 @@ function toggleTask(taskId){
     // un-did a task after already earning the star today -> revoke
     delete p.starDays[key];
     p.stars = Math.max(0, p.stars - 1);
+    removeCompleteStarHistory(p, key);
     saveAppData();
     renderAll();
   } else {
@@ -155,24 +189,34 @@ function toggleTask(taskId){
   }
 }
 
+function showNotifyModal(opts){
+  document.getElementById('celebrateIcon').textContent = opts.icon || '🎉';
+  document.getElementById('celebrateTitle').textContent = opts.title || 'Chúc mừng!';
+  document.getElementById('celebrateMsg').innerHTML = opts.html || '';
+  document.getElementById('celebrateModal').classList.add('open');
+  if(opts.confetti) spawnConfetti();
+}
+
 function celebrate(){
   const p = activeProfile();
   const nr = nextReward();
-  const modal = document.getElementById('celebrateModal');
-  const msg = document.getElementById('celebrateMsg');
-  msg.innerHTML = `${escapeHtml(p.name)} vừa hoàn thành hết việc hôm nay!<br><b>+1 ⭐ (tổng ${p.stars} sao)</b>` +
+  const html = `${escapeHtml(p.name)} vừa hoàn thành hết việc hôm nay!<br><b>+1 ⭐ (tổng ${p.stars} sao)</b>` +
     (nr ? `<br><span style="font-size:13px;color:var(--muted)">Còn ${Math.max(0, nr.threshold-p.stars)} sao nữa để nhận "${nr.emoji} ${nr.title}"</span>` : `<br><span style="font-size:13px;color:var(--muted)">Đã đạt hết các mốc thưởng! 🎉</span>`);
-  modal.classList.add('open');
-  spawnConfetti();
+  showNotifyModal({ icon:'🎉', title:'Chúc mừng!', html, confetti:true });
 }
 function celebrateGift(p, amount, emoji, reason){
   const nr = nextReward(p);
-  const modal = document.getElementById('celebrateModal');
-  const msg = document.getElementById('celebrateMsg');
-  msg.innerHTML = `${emoji} ${escapeHtml(p.name)} được Bố/Mẹ tặng <b>${amount} ⭐</b>!<br>Lý do: <b>${escapeHtml(reason)}</b><br><b>Tổng: ${p.stars} sao</b>` +
+  const html = `${emoji} ${escapeHtml(p.name)} được Bố/Mẹ tặng <b>${amount} ⭐</b>!<br>Lý do: <b>${escapeHtml(reason)}</b><br><b>Tổng: ${p.stars} sao</b>` +
     (nr ? `<br><span style="font-size:13px;color:var(--muted)">Còn ${Math.max(0, nr.threshold-p.stars)} sao nữa để nhận "${nr.emoji} ${nr.title}"</span>` : `<br><span style="font-size:13px;color:var(--muted)">Đã đạt hết các mốc thưởng! 🎉</span>`);
-  modal.classList.add('open');
-  spawnConfetti();
+  showNotifyModal({ icon:'🎉', title:'Chúc mừng!', html, confetti:true });
+}
+function celebrateDeduct(p, amount, emoji, reason){
+  const html = `${emoji} ${escapeHtml(p.name)} bị thu hồi <b>${amount} ⭐</b>.<br>Lý do: <b>${escapeHtml(reason)}</b><br><b>Còn lại: ${p.stars} sao</b>`;
+  showNotifyModal({ icon:'📋', title:'Đã ghi nhận', html, confetti:false });
+}
+function celebrateRedeem(p, r){
+  const html = `${r.emoji} ${escapeHtml(p.name)} đã đổi <b>${r.threshold} ⭐</b> lấy <b>${escapeHtml(r.title)}</b>!<br><span style="font-size:13px;color:var(--muted)">Còn lại: ${p.stars} sao</span>`;
+  showNotifyModal({ icon:'🎉', title:'Đổi thưởng thành công!', html, confetti:true });
 }
 function spawnConfetti(){
   const wrap = document.getElementById('confettiWrap');
@@ -319,24 +363,54 @@ function renderStats(){
     `).join('');
   }
 
-  // Sao được tặng gần đây
-  const giftLogsEl = document.getElementById('giftLogsList');
-  const giftLogs = (p.giftLogs || []).slice(0, 10);
-  if(giftLogs.length===0){
-    giftLogsEl.innerHTML = `<div class="empty-state" style="padding:12px 0"><span class="big">🎁</span>Chưa có sao nào được tặng.</div>`;
-  } else {
-    giftLogsEl.innerHTML = giftLogs.map(g=>{
-      const dt = new Date(g.at || Date.now());
-      const dateStr = `${pad(dt.getDate())}/${pad(dt.getMonth()+1)}`;
-      return `<div class="miss-item"><span>${g.emoji || '🌟'} ${escapeHtml(g.reason || '')} <span style="color:var(--muted);font-size:12px">(${dateStr})</span></span><span class="count" style="background:#fff3cd;color:#b8860b">+${g.amount}⭐</span></div>`;
-    }).join('');
-  }
-
   document.getElementById('statsStars').textContent = `⭐ ${p.stars}`;
 }
 
+/* ---------- Render: History (Lịch sử nhận sao) ---------- */
+function renderHistory(){
+  const p = activeProfile();
+  document.getElementById('historyProfileName').textContent = `Lịch sử nhận sao của ${p.name} ${p.avatar}`;
+  document.getElementById('historyStars').textContent = `⭐ ${p.stars}`;
+
+  const hist = (p.starHistory || []).slice().sort((a,b)=>(b.at||0)-(a.at||0));
+  const completeTotal = hist.filter(h=>h.type==='complete').reduce((s,h)=>s+h.amount,0);
+  const giftTotal = hist.filter(h=>h.type==='gift').reduce((s,h)=>s+h.amount,0);
+  const deductTotal = hist.filter(h=>h.type==='deduct').reduce((s,h)=>s+Math.abs(h.amount),0);
+  const redeemTotal = hist.filter(h=>h.type==='redeem').reduce((s,h)=>s+Math.abs(h.amount),0);
+  document.getElementById('historySummary').innerHTML = `
+    <div class="history-summary-item"><span>✅ Tự hoàn thành việc</span><b>${completeTotal} ⭐</b></div>
+    <div class="history-summary-item"><span>🎁 Được Bố/Mẹ tặng</span><b>${giftTotal} ⭐</b></div>
+    <div class="history-summary-item"><span>⚠️ Bị thu hồi</span><b>${deductTotal} ⭐</b></div>
+    <div class="history-summary-item"><span>🏆 Đã đổi thưởng</span><b>${redeemTotal} ⭐</b></div>
+  `;
+
+  const listEl = document.getElementById('historyList');
+  if(hist.length === 0){
+    listEl.innerHTML = `<div class="empty-state"><span class="big">📜</span>Chưa có lịch sử nhận sao nào.</div>`;
+  } else {
+    listEl.innerHTML = hist.map(h=>{
+      const dt = new Date(h.at || 0);
+      const dateStr = isNaN(dt.getTime()) ? '' : `${pad(dt.getDate())}/${pad(dt.getMonth()+1)}`;
+      const badgeClassByType = { complete:'complete', gift:'complete', deduct:'deduct', redeem:'redeem' };
+      const badgeClass = 'history-badge ' + (badgeClassByType[h.type] || 'complete');
+      const defaultEmoji = { complete:'✅', gift:'🎁', deduct:'⚠️', redeem:'🏆' }[h.type] || '⭐';
+      const sign = h.amount > 0 ? '+' : '';
+      return `
+        <div class="history-item">
+          <div class="history-emoji">${h.emoji || defaultEmoji}</div>
+          <div class="history-info">
+            <div class="history-reason">${escapeHtml(h.reason || '')}</div>
+            <div class="history-date">${dateStr}</div>
+          </div>
+          <div class="${badgeClass}">${sign}${h.amount} ⭐</div>
+        </div>
+      `;
+    }).join('');
+  }
+}
+
 /* ---------- Render: Settings ---------- */
-const EMOJI_CHOICES_TASK = ['🪥','🛏️','📚','📖','🧹','🍎','🚿','🧦','🎒','🐶','🥦','⏰','💧','🎹','⚽️','🖍️'];
+const EMOJI_CHOICES_TASK = ['🪥','🛏️','📚','📖','🧹','🍎','🚿','🧦','🎒','🐶','🥦','⏰','💧','🎹','⚽️','🖍️','💊','🥛','🧮','🍳','🏃','🏀','🔤','🧼','😴','👕','🌱','📺','🎨','🚲'];
 const EMOJI_CHOICES_REWARD = ['🎬','🎡','🧸','🍦','🍕','🎮','🚲','🎪','📱','🏊','🎨','🍭'];
 
 function renderSettings(){
@@ -445,68 +519,151 @@ function submitPinVerify(){
   if(cb) cb();
 }
 
-/* ---------- Gift Star (Tặng sao) ---------- */
-let giftSelectedReasonIdx = 0;
+/* ---------- Star Manage (Tặng sao / Thu hồi sao / Đổi thưởng) ---------- */
+let starManageMode = 'gift'; // 'gift' | 'deduct' | 'redeem'
+let starReasonList = GIFT_REASONS;
+let starReasonIdx = 0;
 
-function renderGiftReasonPicker(){
-  const el = document.getElementById('giftReasonRow');
-  el.innerHTML = GIFT_REASONS.map((r,i)=>`<button type="button" class="day-chip ${i===giftSelectedReasonIdx?'on':''}" data-idx="${i}">${r.emoji} ${r.text}</button>`).join('');
+function renderStarReasonPicker(){
+  const el = document.getElementById('starReasonRow');
+  el.innerHTML = starReasonList.map((r,i)=>`<button type="button" class="day-chip ${i===starReasonIdx?'on':''}" data-idx="${i}">${r.emoji} ${r.text}</button>`).join('');
   el.querySelectorAll('.day-chip').forEach(btn=>{
     btn.addEventListener('click', ()=>{
       el.querySelectorAll('.day-chip').forEach(b=>b.classList.remove('on'));
       btn.classList.add('on');
-      giftSelectedReasonIdx = parseInt(btn.dataset.idx, 10);
-      const isCustom = GIFT_REASONS[giftSelectedReasonIdx].text === 'Khác';
-      document.getElementById('giftCustomReasonWrap').style.display = isCustom ? 'block' : 'none';
+      starReasonIdx = parseInt(btn.dataset.idx, 10);
+      const isCustom = starReasonList[starReasonIdx].text === 'Khác';
+      document.getElementById('starCustomReasonWrap').style.display = isCustom ? 'block' : 'none';
     });
   });
 }
 
-function openGiftStarModal(){
-  const sel = document.getElementById('giftProfileSelect');
-  sel.innerHTML = appData.profiles.map(p=>`<option value="${p.id}">${p.avatar} ${escapeHtml(p.name)}</option>`).join('');
-  sel.value = appData.activeProfileId;
-
-  giftSelectedReasonIdx = 0;
-  renderGiftReasonPicker();
-  document.getElementById('giftCustomReasonWrap').style.display = 'none';
-  document.getElementById('giftCustomReasonInput').value = '';
-
-  document.getElementById('giftStarAmountInput').value = 1;
-  document.querySelectorAll('#giftAmountQuick .day-chip').forEach(c=>c.classList.toggle('on', c.dataset.amt==='1'));
-
-  document.getElementById('giftStarModal').classList.add('open');
-}
-function closeGiftStarModal(){
-  document.getElementById('giftStarModal').classList.remove('open');
+function currentStarManageProfile(){
+  return getProfile(document.getElementById('starManageProfileSelect').value) || activeProfile();
 }
 
-function submitGiftStar(){
-  const profileId = document.getElementById('giftProfileSelect').value;
-  const p = getProfile(profileId);
-  if(!p){ return; }
+function renderRedeemList(){
+  const p = currentStarManageProfile();
+  const el = document.getElementById('redeemRewardList');
+  const sorted = [...p.rewards].sort((a,b)=>a.threshold-b.threshold);
+  if(sorted.length === 0){
+    el.innerHTML = `<div class="empty-state">Chưa có mốc thưởng nào. Vào Cài đặt để thêm nhé!</div>`;
+    return;
+  }
+  el.innerHTML = sorted.map(r=>{
+    const eligible = p.stars >= r.threshold;
+    const need = Math.max(0, r.threshold - p.stars);
+    return `
+      <div class="list-item">
+        <div class="emoji">${r.emoji}</div>
+        <div class="info">
+          <div class="t">${escapeHtml(r.title)}</div>
+          <div class="s">${r.threshold} ⭐${eligible ? '' : ` · cần thêm ${need} sao`}</div>
+        </div>
+        <button type="button" class="redeem-btn ${eligible?'':'disabled'}" data-reward-id="${r.id}" ${eligible?'':'disabled'}>Đổi</button>
+      </div>
+    `;
+  }).join('');
+  el.querySelectorAll('.redeem-btn:not(.disabled)').forEach(btn=>{
+    btn.addEventListener('click', ()=> redeemReward(btn.dataset.rewardId));
+  });
+}
 
-  const chosen = GIFT_REASONS[giftSelectedReasonIdx];
-  let reasonEmoji = chosen ? chosen.emoji : '🌟';
-  let reasonText = chosen ? chosen.text : '';
-  if(reasonText === 'Khác'){
-    const custom = document.getElementById('giftCustomReasonInput').value.trim();
-    if(!custom){ alert('Nhập lý do tặng sao nhé!'); return; }
-    reasonText = custom;
-    reasonEmoji = '🌟';
+function setStarManageMode(mode){
+  starManageMode = mode;
+  document.querySelectorAll('#starManageTabs .seg-btn').forEach(b=>b.classList.toggle('on', b.dataset.mode===mode));
+  const isRedeem = mode === 'redeem';
+  document.getElementById('starManageReasonSection').style.display = isRedeem ? 'none' : 'block';
+  document.getElementById('starRedeemSection').style.display = isRedeem ? 'block' : 'none';
+  document.getElementById('starManageSaveBtn').style.display = isRedeem ? 'none' : 'block';
+  document.getElementById('starManageCancelBtn').textContent = isRedeem ? 'Đóng' : 'Huỷ';
+
+  const titleEl = document.getElementById('starManageTitle');
+  const amtLabel = document.getElementById('starAmountLabel');
+  const saveBtn = document.getElementById('starManageSaveBtn');
+
+  if(mode === 'gift'){
+    titleEl.textContent = '🎁 Tặng sao cho con';
+    amtLabel.textContent = 'Số sao tặng';
+    saveBtn.textContent = '🎉 Tặng sao';
+    starReasonList = GIFT_REASONS;
+  } else if(mode === 'deduct'){
+    titleEl.textContent = '⚠️ Thu hồi sao';
+    amtLabel.textContent = 'Số sao thu hồi';
+    saveBtn.textContent = '⚠️ Thu hồi';
+    starReasonList = DEDUCT_REASONS;
+  } else {
+    titleEl.textContent = '🏆 Đổi phần thưởng';
+    renderRedeemList();
   }
 
-  const amount = parseInt(document.getElementById('giftStarAmountInput').value, 10);
-  if(!amount || amount < 1){ alert('Nhập số sao hợp lệ (từ 1 sao trở lên)!'); return; }
+  if(mode !== 'redeem'){
+    starReasonIdx = 0;
+    renderStarReasonPicker();
+    document.getElementById('starCustomReasonWrap').style.display = 'none';
+    document.getElementById('starCustomReasonInput').value = '';
+    document.getElementById('starAmountInput').value = 1;
+    document.querySelectorAll('#starAmountQuick .day-chip').forEach(c=>c.classList.toggle('on', c.dataset.amt==='1'));
+  }
+}
 
-  p.stars += amount;
-  p.giftLogs = p.giftLogs || [];
-  p.giftLogs.unshift({ id: uid('g'), dateKey: todayKey(), reason: reasonText, emoji: reasonEmoji, amount, at: Date.now() });
+function openStarManageModal(mode){
+  const sel = document.getElementById('starManageProfileSelect');
+  sel.innerHTML = appData.profiles.map(p=>`<option value="${p.id}">${p.avatar} ${escapeHtml(p.name)}</option>`).join('');
+  sel.value = appData.activeProfileId;
+  setStarManageMode(mode || 'gift');
+  document.getElementById('starManageModal').classList.add('open');
+}
+function closeStarManageModal(){
+  document.getElementById('starManageModal').classList.remove('open');
+}
+
+function submitStarManage(){
+  const p = currentStarManageProfile();
+  if(!p){ return; }
+
+  const chosen = starReasonList[starReasonIdx];
+  let reasonEmoji = chosen ? chosen.emoji : (starManageMode==='deduct' ? '⚠️' : '🌟');
+  let reasonText = chosen ? chosen.text : '';
+  if(reasonText === 'Khác'){
+    const custom = document.getElementById('starCustomReasonInput').value.trim();
+    if(!custom){ alert('Nhập lý do nhé!'); return; }
+    reasonText = custom;
+    reasonEmoji = starManageMode === 'deduct' ? '⚠️' : '🌟';
+  }
+
+  const amount = parseInt(document.getElementById('starAmountInput').value, 10);
+  if(!amount || amount < 1){ alert('Nhập số sao hợp lệ (từ 1 trở lên)!'); return; }
+
+  if(starManageMode === 'gift'){
+    p.stars += amount;
+    addStarHistory(p, { type:'gift', dateKey: todayKey(), amount, reason: reasonText, emoji: reasonEmoji });
+    saveAppData();
+    closeStarManageModal();
+    renderAll();
+    celebrateGift(p, amount, reasonEmoji, reasonText);
+  } else if(starManageMode === 'deduct'){
+    p.stars = Math.max(0, p.stars - amount);
+    addStarHistory(p, { type:'deduct', dateKey: todayKey(), amount: -amount, reason: reasonText, emoji: reasonEmoji });
+    saveAppData();
+    closeStarManageModal();
+    renderAll();
+    celebrateDeduct(p, amount, reasonEmoji, reasonText);
+  }
+}
+
+function redeemReward(rewardId){
+  const p = currentStarManageProfile();
+  const r = p.rewards.find(x=>x.id===rewardId);
+  if(!r) return;
+  if(p.stars < r.threshold){ alert('Bé chưa đủ sao để đổi phần thưởng này!'); return; }
+  if(!confirm(`Xác nhận đổi ${r.threshold} sao lấy "${r.title}"?`)) return;
+  p.stars -= r.threshold;
+  addStarHistory(p, { type:'redeem', dateKey: todayKey(), amount: -r.threshold, reason: r.title, emoji: r.emoji });
   saveAppData();
-
-  closeGiftStarModal();
+  closeStarManageModal();
   renderAll();
-  celebrateGift(p, amount, reasonEmoji, reasonText);
+  celebrateRedeem(p, r);
 }
 
 /* ---------- Task modal ---------- */
@@ -679,6 +836,7 @@ function switchTab(name){
   document.getElementById('tabbar').style.display = (name==='picker') ? 'none' : 'flex';
   if(name==='today') renderToday();
   if(name==='stats') renderStats();
+  if(name==='history') renderHistory();
   if(name==='settings') renderSettings();
   if(name==='picker') renderPicker();
 }
@@ -688,6 +846,7 @@ function renderAll(){
   renderToday();
   const activePage = document.querySelector('.page.active');
   if(activePage && activePage.id === 'page-stats') renderStats();
+  if(activePage && activePage.id === 'page-history') renderHistory();
   if(activePage && activePage.id === 'page-settings') renderSettings();
   if(activePage && activePage.id === 'page-picker') renderPicker();
 }
@@ -719,12 +878,12 @@ document.addEventListener('DOMContentLoaded', ()=>{
     document.getElementById('celebrateModal').classList.remove('open');
   });
 
-  // Tặng sao (Bố/Mẹ) — yêu cầu mã PIN
-  document.getElementById('giftStarBtn').addEventListener('click', ()=>{
+  // Quản lý sao (Bố/Mẹ) — Tặng / Thu hồi / Đổi thưởng — yêu cầu mã PIN
+  document.getElementById('starManageBtn').addEventListener('click', ()=>{
     if(!appData.parentPin){
-      openPinSetupModal(()=> openGiftStarModal());
+      openPinSetupModal(()=> openStarManageModal('gift'));
     } else {
-      openPinVerifyModal(()=> openGiftStarModal());
+      openPinVerifyModal(()=> openStarManageModal('gift'));
     }
   });
   document.getElementById('managePinBtn').addEventListener('click', ()=>{
@@ -743,13 +902,19 @@ document.addEventListener('DOMContentLoaded', ()=>{
   document.getElementById('pinVerifySubmitBtn').addEventListener('click', submitPinVerify);
   document.getElementById('pinVerifyInput').addEventListener('keydown', (e)=>{ if(e.key==='Enter') submitPinVerify(); });
 
-  document.getElementById('giftCancelBtn').addEventListener('click', closeGiftStarModal);
-  document.getElementById('giftSaveBtn').addEventListener('click', submitGiftStar);
-  document.querySelectorAll('#giftAmountQuick .day-chip').forEach(chip=>{
+  document.getElementById('starManageCancelBtn').addEventListener('click', closeStarManageModal);
+  document.getElementById('starManageSaveBtn').addEventListener('click', submitStarManage);
+  document.getElementById('starManageProfileSelect').addEventListener('change', ()=>{
+    if(starManageMode === 'redeem') renderRedeemList();
+  });
+  document.querySelectorAll('#starManageTabs .seg-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=> setStarManageMode(btn.dataset.mode));
+  });
+  document.querySelectorAll('#starAmountQuick .day-chip').forEach(chip=>{
     chip.addEventListener('click', ()=>{
-      document.querySelectorAll('#giftAmountQuick .day-chip').forEach(c=>c.classList.remove('on'));
+      document.querySelectorAll('#starAmountQuick .day-chip').forEach(c=>c.classList.remove('on'));
       chip.classList.add('on');
-      document.getElementById('giftStarAmountInput').value = chip.dataset.amt;
+      document.getElementById('starAmountInput').value = chip.dataset.amt;
     });
   });
 

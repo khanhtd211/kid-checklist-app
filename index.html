@@ -34,7 +34,7 @@
         <div class="date" id="todayDate"></div>
       </div>
       <div class="stars-badge" id="starsBadge">⭐ 0</div>
-      <button class="gift-btn" id="giftStarBtn" title="Tặng sao cho con">🎁</button>
+      <button class="star-manage-btn" id="starManageBtn" title="Quản lý sao: Tặng / Thu hồi / Đổi thưởng">⭐</button>
     </div>
 
     <div class="progress-wrap">
@@ -81,10 +81,22 @@
       <div class="section-title">📝 Việc còn thiếu trong tuần</div>
       <div id="missTasks"></div>
     </div>
+  </div>
+
+  <!-- HISTORY -->
+  <div class="page" id="page-history">
+    <div class="topbar">
+      <div class="greet" id="historyProfileName">Lịch sử nhận sao</div>
+      <div class="stars-badge" id="historyStars">⭐ 0</div>
+    </div>
 
     <div class="card">
-      <div class="section-title">🎁 Sao được tặng gần đây</div>
-      <div id="giftLogsList"></div>
+      <div class="history-summary" id="historySummary"></div>
+    </div>
+
+    <div class="card">
+      <div class="section-title">📜 Toàn bộ lịch sử</div>
+      <div id="historyList"></div>
     </div>
   </div>
 
@@ -126,6 +138,7 @@
 <div class="tabbar" id="tabbar">
   <button class="active" data-tab="today"><span class="icon">✅</span>Hôm nay</button>
   <button data-tab="stats"><span class="icon">📊</span>Thống kê</button>
+  <button data-tab="history"><span class="icon">📜</span>Lịch sử</button>
   <button data-tab="settings"><span class="icon">⚙️</span>Cài đặt</button>
 </div>
 
@@ -234,43 +247,57 @@
   </div>
 </div>
 
-<!-- Gift star modal -->
-<div class="overlay" id="giftStarModal">
+<!-- Star manage modal: Tặng sao / Thu hồi sao / Đổi thưởng -->
+<div class="overlay" id="starManageModal">
   <div class="sheet">
-    <h3>🎁 Tặng sao cho con</h3>
+    <h3 id="starManageTitle">🎁 Tặng sao cho con</h3>
     <div class="field">
       <label>Chọn bé</label>
-      <select id="giftProfileSelect"></select>
+      <select id="starManageProfileSelect"></select>
     </div>
-    <div class="field">
-      <label>Lý do tặng sao</label>
-      <div class="days-row" id="giftReasonRow"></div>
-      <div id="giftCustomReasonWrap" style="display:none;margin-top:8px">
-        <input type="text" id="giftCustomReasonInput" placeholder="Nhập lý do...">
+
+    <div class="segmented" id="starManageTabs">
+      <button type="button" class="seg-btn on" data-mode="gift">🎁 Tặng sao</button>
+      <button type="button" class="seg-btn" data-mode="deduct">⚠️ Thu hồi</button>
+      <button type="button" class="seg-btn" data-mode="redeem">🏆 Đổi thưởng</button>
+    </div>
+
+    <div id="starManageReasonSection">
+      <div class="field">
+        <label>Lý do</label>
+        <div class="days-row" id="starReasonRow"></div>
+        <div id="starCustomReasonWrap" style="display:none;margin-top:8px">
+          <input type="text" id="starCustomReasonInput" placeholder="Nhập lý do...">
+        </div>
+      </div>
+      <div class="field">
+        <label id="starAmountLabel">Số sao tặng</label>
+        <input type="text" inputmode="numeric" id="starAmountInput" value="1">
+        <div class="days-row" id="starAmountQuick" style="margin-top:8px">
+          <button type="button" class="day-chip" data-amt="1">1</button>
+          <button type="button" class="day-chip" data-amt="3">3</button>
+          <button type="button" class="day-chip" data-amt="5">5</button>
+          <button type="button" class="day-chip" data-amt="10">10</button>
+        </div>
       </div>
     </div>
-    <div class="field">
-      <label>Số sao tặng</label>
-      <input type="text" inputmode="numeric" id="giftStarAmountInput" value="1">
-      <div class="days-row" id="giftAmountQuick" style="margin-top:8px">
-        <button type="button" class="day-chip" data-amt="1">+1</button>
-        <button type="button" class="day-chip" data-amt="3">+3</button>
-        <button type="button" class="day-chip" data-amt="5">+5</button>
-        <button type="button" class="day-chip" data-amt="10">+10</button>
-      </div>
+
+    <div id="starRedeemSection" style="display:none">
+      <div id="redeemRewardList"></div>
     </div>
+
     <div class="sheet-actions">
-      <button class="btn-secondary" id="giftCancelBtn">Huỷ</button>
-      <button class="btn-primary" id="giftSaveBtn">🎉 Tặng sao</button>
+      <button class="btn-secondary" id="starManageCancelBtn">Huỷ</button>
+      <button class="btn-primary" id="starManageSaveBtn">🎉 Tặng sao</button>
     </div>
   </div>
 </div>
 
-<!-- Celebrate modal -->
+<!-- Celebrate / notify modal -->
 <div class="overlay" id="celebrateModal">
   <div class="sheet" style="text-align:center">
-    <div style="font-size:56px">🎉</div>
-    <h3>Chúc mừng!</h3>
+    <div style="font-size:56px" id="celebrateIcon">🎉</div>
+    <h3 id="celebrateTitle">Chúc mừng!</h3>
     <p id="celebrateMsg" style="font-size:16px;line-height:1.6"></p>
     <div class="sheet-actions">
       <button class="btn-primary" id="celebrateCloseBtn" style="width:100%">Tuyệt vời!</button>
