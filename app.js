@@ -4,6 +4,13 @@ const LEGACY_KEY = 'kidChecklistData_v1';
 const DAY_NAMES = ['CN','T2','T3','T4','T5','T6','T7'];
 const DAY_NAMES_FULL = ['Chủ nhật','Thứ 2','Thứ 3','Thứ 4','Thứ 5','Thứ 6','Thứ 7'];
 const AVATAR_CHOICES = ['🧒','👦','👧','👶','🐱','🐶','🦁','🐰','🦄','🐻','🐼','🦊'];
+const GIFT_REASONS = [
+  { emoji:'🎓', text:'Đạt điểm cao' },
+  { emoji:'🧹', text:'Làm việc nhà' },
+  { emoji:'🤝', text:'Giúp đỡ người khác' },
+  { emoji:'💖', text:'Ngoan, lễ phép' },
+  { emoji:'🎁', text:'Khác' },
+];
 
 function uid(prefix){ return (prefix||'t') + Math.random().toString(36).slice(2,9); }
 
@@ -32,11 +39,12 @@ function newProfile(name, avatar){
     logs: {},      // { 'YYYY-MM-DD': { taskId: true } }
     starDays: {},  // { 'YYYY-MM-DD': true } -> a star was earned that day
     stars: 0,
+    giftLogs: [],  // [{ id, dateKey, reason, emoji, amount, at }] -> stars gifted by parent
   };
 }
 function defaultAppData(){
   const p = newProfile('Bé 1', '🧒');
-  return { profiles: [p], activeProfileId: p.id };
+  return { profiles: [p], activeProfileId: p.id, parentPin: null };
 }
 
 function loadAppData(){
@@ -61,8 +69,9 @@ function loadAppData(){
         logs: l.logs || {},
         starDays: l.starDays || {},
         stars: l.stars || 0,
+        giftLogs: [],
       };
-      return { profiles: [p], activeProfileId: p.id };
+      return { profiles: [p], activeProfileId: p.id, parentPin: null };
     }
     return defaultAppData();
   }catch(e){ return defaultAppData(); }
@@ -71,6 +80,9 @@ function loadAppData(){
 function saveAppData(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(appData)); }
 
 let appData = loadAppData();
+// Migrate/normalize fields for data saved before the PIN & gift-star feature existed
+if(typeof appData.parentPin === 'undefined') appData.parentPin = null;
+(appData.profiles || []).forEach(p=>{ if(!Array.isArray(p.giftLogs)) p.giftLogs = []; });
 
 function getProfile(id){ return appData.profiles.find(p=>p.id===id); }
 function activeProfile(){ return getProfile(appData.activeProfileId) || appData.profiles[0]; }
@@ -112,8 +124,8 @@ function progressFor(d){
   const done = list.filter(t => isDone(key, t.id)).length;
   return { done, total: list.length };
 }
-function nextReward(){
-  const p = activeProfile();
+function nextReward(p){
+  p = p || activeProfile();
   const sorted = [...p.rewards].sort((a,b)=>a.threshold-b.threshold);
   return sorted.find(r => p.stars < r.threshold) || null;
 }
@@ -149,6 +161,15 @@ function celebrate(){
   const modal = document.getElementById('celebrateModal');
   const msg = document.getElementById('celebrateMsg');
   msg.innerHTML = `${escapeHtml(p.name)} vừa hoàn thành hết việc hôm nay!<br><b>+1 ⭐ (tổng ${p.stars} sao)</b>` +
+    (nr ? `<br><span style="font-size:13px;color:var(--muted)">Còn ${Math.max(0, nr.threshold-p.stars)} sao nữa để nhận "${nr.emoji} ${nr.title}"</span>` : `<br><span style="font-size:13px;color:var(--muted)">Đã đạt hết các mốc thưởng! 🎉</span>`);
+  modal.classList.add('open');
+  spawnConfetti();
+}
+function celebrateGift(p, amount, emoji, reason){
+  const nr = nextReward(p);
+  const modal = document.getElementById('celebrateModal');
+  const msg = document.getElementById('celebrateMsg');
+  msg.innerHTML = `${emoji} ${escapeHtml(p.name)} được Bố/Mẹ tặng <b>${amount} ⭐</b>!<br>Lý do: <b>${escapeHtml(reason)}</b><br><b>Tổng: ${p.stars} sao</b>` +
     (nr ? `<br><span style="font-size:13px;color:var(--muted)">Còn ${Math.max(0, nr.threshold-p.stars)} sao nữa để nhận "${nr.emoji} ${nr.title}"</span>` : `<br><span style="font-size:13px;color:var(--muted)">Đã đạt hết các mốc thưởng! 🎉</span>`);
   modal.classList.add('open');
   spawnConfetti();
@@ -298,6 +319,19 @@ function renderStats(){
     `).join('');
   }
 
+  // Sao được tặng gần đây
+  const giftLogsEl = document.getElementById('giftLogsList');
+  const giftLogs = (p.giftLogs || []).slice(0, 10);
+  if(giftLogs.length===0){
+    giftLogsEl.innerHTML = `<div class="empty-state" style="padding:12px 0"><span class="big">🎁</span>Chưa có sao nào được tặng.</div>`;
+  } else {
+    giftLogsEl.innerHTML = giftLogs.map(g=>{
+      const dt = new Date(g.at || Date.now());
+      const dateStr = `${pad(dt.getDate())}/${pad(dt.getMonth()+1)}`;
+      return `<div class="miss-item"><span>${g.emoji || '🌟'} ${escapeHtml(g.reason || '')} <span style="color:var(--muted);font-size:12px">(${dateStr})</span></span><span class="count" style="background:#fff3cd;color:#b8860b">+${g.amount}⭐</span></div>`;
+    }).join('');
+  }
+
   document.getElementById('statsStars').textContent = `⭐ ${p.stars}`;
 }
 
@@ -335,6 +369,13 @@ function renderSettings(){
       <button class="icon-btn danger" onclick="deleteReward('${r.id}')">🗑️</button>
     </div>
   `).join('') || `<div class="empty-state">Chưa có mốc thưởng nào.</div>`;
+
+  const pinStatusEl = document.getElementById('pinStatusText');
+  if(pinStatusEl){
+    pinStatusEl.textContent = appData.parentPin
+      ? '🔒 Đã đặt mã PIN — cần nhập mã này mỗi khi tặng sao.'
+      : '⚠️ Chưa đặt mã PIN — hãy đặt để chỉ Bố/Mẹ mới tặng sao được.';
+  }
 }
 
 function deleteTask(id){
@@ -348,6 +389,124 @@ function deleteReward(id){
   const p = activeProfile();
   p.rewards = p.rewards.filter(r=>r.id!==id);
   saveAppData(); renderAll();
+}
+
+/* ---------- Parent PIN ---------- */
+let pinSuccessCallback = null;
+
+function openPinSetupModal(onSuccess){
+  pinSuccessCallback = onSuccess || null;
+  document.getElementById('pinSetupNewInput').value = '';
+  document.getElementById('pinSetupConfirmInput').value = '';
+  document.getElementById('pinSetupError').textContent = '';
+  document.getElementById('pinSetupModal').classList.add('open');
+  setTimeout(()=>document.getElementById('pinSetupNewInput').focus(), 50);
+}
+function closePinSetupModal(){
+  pinSuccessCallback = null;
+  document.getElementById('pinSetupModal').classList.remove('open');
+}
+function savePinSetup(){
+  const pin1 = document.getElementById('pinSetupNewInput').value.trim();
+  const pin2 = document.getElementById('pinSetupConfirmInput').value.trim();
+  const err = document.getElementById('pinSetupError');
+  if(pin1.length < 4){ err.textContent = 'Mã PIN cần ít nhất 4 số.'; return; }
+  if(pin1 !== pin2){ err.textContent = 'Hai mã PIN không khớp, nhập lại nhé.'; return; }
+  appData.parentPin = pin1;
+  saveAppData();
+  document.getElementById('pinSetupModal').classList.remove('open');
+  renderSettings();
+  const cb = pinSuccessCallback; pinSuccessCallback = null;
+  if(cb) cb();
+}
+
+function openPinVerifyModal(onSuccess){
+  pinSuccessCallback = onSuccess || null;
+  document.getElementById('pinVerifyInput').value = '';
+  document.getElementById('pinVerifyError').textContent = '';
+  document.getElementById('pinVerifyModal').classList.add('open');
+  setTimeout(()=>document.getElementById('pinVerifyInput').focus(), 50);
+}
+function closePinVerifyModal(){
+  pinSuccessCallback = null;
+  document.getElementById('pinVerifyModal').classList.remove('open');
+}
+function submitPinVerify(){
+  const val = document.getElementById('pinVerifyInput').value.trim();
+  const err = document.getElementById('pinVerifyError');
+  if(!appData.parentPin || val !== appData.parentPin){
+    err.textContent = 'Mã PIN không đúng, thử lại nhé.';
+    document.getElementById('pinVerifyInput').value = '';
+    document.getElementById('pinVerifyInput').focus();
+    return;
+  }
+  document.getElementById('pinVerifyModal').classList.remove('open');
+  const cb = pinSuccessCallback; pinSuccessCallback = null;
+  if(cb) cb();
+}
+
+/* ---------- Gift Star (Tặng sao) ---------- */
+let giftSelectedReasonIdx = 0;
+
+function renderGiftReasonPicker(){
+  const el = document.getElementById('giftReasonRow');
+  el.innerHTML = GIFT_REASONS.map((r,i)=>`<button type="button" class="day-chip ${i===giftSelectedReasonIdx?'on':''}" data-idx="${i}">${r.emoji} ${r.text}</button>`).join('');
+  el.querySelectorAll('.day-chip').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      el.querySelectorAll('.day-chip').forEach(b=>b.classList.remove('on'));
+      btn.classList.add('on');
+      giftSelectedReasonIdx = parseInt(btn.dataset.idx, 10);
+      const isCustom = GIFT_REASONS[giftSelectedReasonIdx].text === 'Khác';
+      document.getElementById('giftCustomReasonWrap').style.display = isCustom ? 'block' : 'none';
+    });
+  });
+}
+
+function openGiftStarModal(){
+  const sel = document.getElementById('giftProfileSelect');
+  sel.innerHTML = appData.profiles.map(p=>`<option value="${p.id}">${p.avatar} ${escapeHtml(p.name)}</option>`).join('');
+  sel.value = appData.activeProfileId;
+
+  giftSelectedReasonIdx = 0;
+  renderGiftReasonPicker();
+  document.getElementById('giftCustomReasonWrap').style.display = 'none';
+  document.getElementById('giftCustomReasonInput').value = '';
+
+  document.getElementById('giftStarAmountInput').value = 1;
+  document.querySelectorAll('#giftAmountQuick .day-chip').forEach(c=>c.classList.toggle('on', c.dataset.amt==='1'));
+
+  document.getElementById('giftStarModal').classList.add('open');
+}
+function closeGiftStarModal(){
+  document.getElementById('giftStarModal').classList.remove('open');
+}
+
+function submitGiftStar(){
+  const profileId = document.getElementById('giftProfileSelect').value;
+  const p = getProfile(profileId);
+  if(!p){ return; }
+
+  const chosen = GIFT_REASONS[giftSelectedReasonIdx];
+  let reasonEmoji = chosen ? chosen.emoji : '🌟';
+  let reasonText = chosen ? chosen.text : '';
+  if(reasonText === 'Khác'){
+    const custom = document.getElementById('giftCustomReasonInput').value.trim();
+    if(!custom){ alert('Nhập lý do tặng sao nhé!'); return; }
+    reasonText = custom;
+    reasonEmoji = '🌟';
+  }
+
+  const amount = parseInt(document.getElementById('giftStarAmountInput').value, 10);
+  if(!amount || amount < 1){ alert('Nhập số sao hợp lệ (từ 1 sao trở lên)!'); return; }
+
+  p.stars += amount;
+  p.giftLogs = p.giftLogs || [];
+  p.giftLogs.unshift({ id: uid('g'), dateKey: todayKey(), reason: reasonText, emoji: reasonEmoji, amount, at: Date.now() });
+  saveAppData();
+
+  closeGiftStarModal();
+  renderAll();
+  celebrateGift(p, amount, reasonEmoji, reasonText);
 }
 
 /* ---------- Task modal ---------- */
@@ -558,6 +717,40 @@ document.addEventListener('DOMContentLoaded', ()=>{
   document.getElementById('profileSaveBtn').addEventListener('click', saveProfileModal);
   document.getElementById('celebrateCloseBtn').addEventListener('click', ()=>{
     document.getElementById('celebrateModal').classList.remove('open');
+  });
+
+  // Tặng sao (Bố/Mẹ) — yêu cầu mã PIN
+  document.getElementById('giftStarBtn').addEventListener('click', ()=>{
+    if(!appData.parentPin){
+      openPinSetupModal(()=> openGiftStarModal());
+    } else {
+      openPinVerifyModal(()=> openGiftStarModal());
+    }
+  });
+  document.getElementById('managePinBtn').addEventListener('click', ()=>{
+    if(appData.parentPin){
+      openPinVerifyModal(()=> openPinSetupModal(null));
+    } else {
+      openPinSetupModal(null);
+    }
+  });
+
+  document.getElementById('pinSetupCancelBtn').addEventListener('click', closePinSetupModal);
+  document.getElementById('pinSetupSaveBtn').addEventListener('click', savePinSetup);
+  document.getElementById('pinSetupConfirmInput').addEventListener('keydown', (e)=>{ if(e.key==='Enter') savePinSetup(); });
+
+  document.getElementById('pinVerifyCancelBtn').addEventListener('click', closePinVerifyModal);
+  document.getElementById('pinVerifySubmitBtn').addEventListener('click', submitPinVerify);
+  document.getElementById('pinVerifyInput').addEventListener('keydown', (e)=>{ if(e.key==='Enter') submitPinVerify(); });
+
+  document.getElementById('giftCancelBtn').addEventListener('click', closeGiftStarModal);
+  document.getElementById('giftSaveBtn').addEventListener('click', submitGiftStar);
+  document.querySelectorAll('#giftAmountQuick .day-chip').forEach(chip=>{
+    chip.addEventListener('click', ()=>{
+      document.querySelectorAll('#giftAmountQuick .day-chip').forEach(c=>c.classList.remove('on'));
+      chip.classList.add('on');
+      document.getElementById('giftStarAmountInput').value = chip.dataset.amt;
+    });
   });
 
   // Register service worker for offline/installable support

@@ -34,6 +34,7 @@
         <div class="date" id="todayDate"></div>
       </div>
       <div class="stars-badge" id="starsBadge">⭐ 0</div>
+      <button class="gift-btn" id="giftStarBtn" title="Tặng sao cho con">🎁</button>
     </div>
 
     <div class="progress-wrap">
@@ -80,6 +81,11 @@
       <div class="section-title">📝 Việc còn thiếu trong tuần</div>
       <div id="missTasks"></div>
     </div>
+
+    <div class="card">
+      <div class="section-title">🎁 Sao được tặng gần đây</div>
+      <div id="giftLogsList"></div>
+    </div>
   </div>
 
   <!-- SETTINGS -->
@@ -94,6 +100,12 @@
         <label>Tên bé</label>
         <input type="text" id="childNameInput" placeholder="Tên bé">
       </div>
+    </div>
+
+    <div class="card">
+      <div class="section-title">🔒 Bảo mật</div>
+      <div id="pinStatusText" style="font-size:13px;color:var(--muted);margin-bottom:10px"></div>
+      <button class="add-btn" id="managePinBtn">Đặt / Đổi mã PIN Bố Mẹ</button>
     </div>
 
     <div class="card">
@@ -181,6 +193,75 @@
     <div class="sheet-actions">
       <button class="btn-secondary" id="profileCancelBtn">Huỷ</button>
       <button class="btn-primary" id="profileSaveBtn">Lưu</button>
+    </div>
+  </div>
+</div>
+
+<!-- PIN setup modal -->
+<div class="overlay" id="pinSetupModal">
+  <div class="sheet">
+    <h3>🔒 Tạo mã PIN cho Bố/Mẹ</h3>
+    <div style="font-size:13px;color:var(--muted);margin-bottom:14px">Mã PIN dùng để xác nhận mỗi khi tặng sao hoặc đổi mã PIN — chỉ Bố/Mẹ nên biết mã này nhé.</div>
+    <div class="field">
+      <label>Mã PIN mới (ít nhất 4 số)</label>
+      <input type="password" inputmode="numeric" maxlength="8" id="pinSetupNewInput" placeholder="••••">
+    </div>
+    <div class="field">
+      <label>Nhập lại mã PIN</label>
+      <input type="password" inputmode="numeric" maxlength="8" id="pinSetupConfirmInput" placeholder="••••">
+    </div>
+    <div style="color:var(--red);font-size:13px;min-height:18px" id="pinSetupError"></div>
+    <div class="sheet-actions">
+      <button class="btn-secondary" id="pinSetupCancelBtn">Huỷ</button>
+      <button class="btn-primary" id="pinSetupSaveBtn">Lưu</button>
+    </div>
+  </div>
+</div>
+
+<!-- PIN verify modal -->
+<div class="overlay" id="pinVerifyModal">
+  <div class="sheet">
+    <h3>🔒 Nhập mã PIN Bố/Mẹ</h3>
+    <div class="field">
+      <label>Mã PIN</label>
+      <input type="password" inputmode="numeric" maxlength="8" id="pinVerifyInput" placeholder="••••">
+    </div>
+    <div style="color:var(--red);font-size:13px;min-height:18px" id="pinVerifyError"></div>
+    <div class="sheet-actions">
+      <button class="btn-secondary" id="pinVerifyCancelBtn">Huỷ</button>
+      <button class="btn-primary" id="pinVerifySubmitBtn">Xác nhận</button>
+    </div>
+  </div>
+</div>
+
+<!-- Gift star modal -->
+<div class="overlay" id="giftStarModal">
+  <div class="sheet">
+    <h3>🎁 Tặng sao cho con</h3>
+    <div class="field">
+      <label>Chọn bé</label>
+      <select id="giftProfileSelect"></select>
+    </div>
+    <div class="field">
+      <label>Lý do tặng sao</label>
+      <div class="days-row" id="giftReasonRow"></div>
+      <div id="giftCustomReasonWrap" style="display:none;margin-top:8px">
+        <input type="text" id="giftCustomReasonInput" placeholder="Nhập lý do...">
+      </div>
+    </div>
+    <div class="field">
+      <label>Số sao tặng</label>
+      <input type="text" inputmode="numeric" id="giftStarAmountInput" value="1">
+      <div class="days-row" id="giftAmountQuick" style="margin-top:8px">
+        <button type="button" class="day-chip" data-amt="1">+1</button>
+        <button type="button" class="day-chip" data-amt="3">+3</button>
+        <button type="button" class="day-chip" data-amt="5">+5</button>
+        <button type="button" class="day-chip" data-amt="10">+10</button>
+      </div>
+    </div>
+    <div class="sheet-actions">
+      <button class="btn-secondary" id="giftCancelBtn">Huỷ</button>
+      <button class="btn-primary" id="giftSaveBtn">🎉 Tặng sao</button>
     </div>
   </div>
 </div>
