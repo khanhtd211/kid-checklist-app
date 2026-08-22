@@ -135,6 +135,13 @@ if(typeof appData.parentPin === 'undefined') appData.parentPin = null;
     });
     p.vouchers = vouchers;
   }
+  // Sửa dữ liệu cũ: các lần hoàn sao (huỷ phiếu) từng bị ghi nhầm loại 'gift',
+  // khiến thống kê "Được Bố/Mẹ tặng" bị cộng nhầm — chuyển lại đúng về loại 'redeem'.
+  (p.starHistory || []).forEach(h=>{
+    if(h.type === 'gift' && typeof h.reason === 'string' && h.reason.indexOf('Hoàn sao (huỷ phiếu') === 0){
+      h.type = 'redeem';
+    }
+  });
 });
 
 function getProfile(id){ return appData.profiles.find(p=>p.id===id); }
@@ -267,6 +274,19 @@ function renderTodoBadges(p, streak){
     badgeEl.style.display = 'inline-flex';
   } else {
     badgeEl.style.display = 'none';
+  }
+
+  const hintEl = document.getElementById('todoBadgeHint');
+  if(hintEl){
+    const next = TODO_STREAK_BADGES.find(b => !earned.includes(b.days));
+    if(next){
+      const remain = next.days - streak;
+      hintEl.textContent = remain > 0
+        ? `Cố lên nào! Chỉ còn ${remain} ngày nữa là đạt mốc ${next.days} ngày, sẽ có phần quà bí mật từ Ba Mẹ đó nhé! 🎁`
+        : `Sắp mở khoá huy hiệu ${next.emoji} ${next.title} rồi, cố lên nào! 🎁`;
+    } else {
+      hintEl.textContent = `Bé đã mở khoá hết tất cả huy hiệu, quá xuất sắc luôn! 👑✨`;
+    }
   }
 }
 function nextReward(p){
@@ -632,7 +652,7 @@ function renderHistory(){
   const completeTotal = hist.filter(h=>h.type==='complete').reduce((s,h)=>s+h.amount,0);
   const giftTotal = hist.filter(h=>h.type==='gift').reduce((s,h)=>s+h.amount,0);
   const deductTotal = hist.filter(h=>h.type==='deduct').reduce((s,h)=>s+Math.abs(h.amount),0);
-  const redeemTotal = hist.filter(h=>h.type==='redeem').reduce((s,h)=>s+Math.abs(h.amount),0);
+  const redeemTotal = Math.abs(hist.filter(h=>h.type==='redeem').reduce((s,h)=>s+h.amount,0));
   document.getElementById('historySummary').innerHTML = `
     <div class="history-summary-item"><span>✅ Tự hoàn thành việc</span><b>${completeTotal} ⭐</b></div>
     <div class="history-summary-item"><span>🎁 Được Bố/Mẹ tặng</span><b>${giftTotal} ⭐</b></div>
@@ -667,7 +687,7 @@ function renderHistory(){
 
 /* ---------- Render: Settings ---------- */
 const EMOJI_CHOICES_TASK = ['🪥','🛏️','📚','📖','🧹','🍎','🚿','🧦','🎒','🐶','🥦','⏰','💧','🎹','⚽️','🖍️','💊','🥛','🧮','🍳','🏃','🏀','🔤','🧼','😴','👕','🌱','📺','🎨','🚲'];
-const EMOJI_CHOICES_REWARD = ['🎬','🎡','🧸','🍦','🍕','🎮','🚲','🎪','📱','🏊','🎨','🍭'];
+const EMOJI_CHOICES_REWARD = ['🎬','🎡','🧸','🍦','🍕','🎮','🚲','🎪','📱','🏊','🎨','🍭','💵','💰'];
 
 function renderSettings(){
   const p = activeProfile();
@@ -1015,7 +1035,7 @@ function refundVoucher(voucherId){
   if(v.cost > 0){
     if(!confirm(`Xoá phiếu "${v.title}" và hoàn lại ${v.cost} sao?`)) return;
     p.stars += v.cost;
-    addStarHistory(p, { type:'gift', dateKey: todayKey(), amount: v.cost, reason: `Hoàn sao (huỷ phiếu ${v.title})`, emoji: '↩️' });
+    addStarHistory(p, { type:'redeem', dateKey: todayKey(), amount: v.cost, reason: `Hoàn sao (huỷ phiếu ${v.title})`, emoji: '↩️' });
   } else {
     if(!confirm(`Xoá phiếu "${v.title}" khỏi danh sách?`)) return;
   }
@@ -1029,7 +1049,7 @@ function requestRefundVoucher(voucherId){
 }
 
 /* ---------- Tặng phiếu quà trực tiếp (không tốn sao) ---------- */
-const EMOJI_CHOICES_VOUCHER = ['🎮','📖','🎬','🍦','🍿','🎨','⚽','🎧','🧩','🍕','🚲','🎪'];
+const EMOJI_CHOICES_VOUCHER = ['🎮','📖','🎬','🍦','🍿','🎨','⚽','🎧','🧩','🍕','🚲','🎪','💵','💰'];
 function openGiftVoucherModal(){
   document.getElementById('giftVoucherTitleInput').value = '';
   renderEmojiPicker('giftVoucherEmojiPicker', EMOJI_CHOICES_VOUCHER, EMOJI_CHOICES_VOUCHER[0], 'giftVoucherEmojiInput');

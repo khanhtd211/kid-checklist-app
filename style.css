@@ -174,6 +174,10 @@ button{font-family:inherit;}
 .todo-badge-chip.locked .todo-badge-emoji{opacity:.4;}
 .todo-badge-chip .todo-badge-days{font-size:11px;font-weight:700;color:var(--muted);}
 .todo-badge-chip.unlocked .todo-badge-days{color:var(--text);}
+.todo-badge-hint{
+  margin-top:12px;padding:10px 12px;border-radius:14px;font-size:13px;line-height:1.4;
+  background:#fff3d6;color:#8a6a1f;font-weight:600;
+}
 
 .month-cal-head{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:6px;}
 .month-cal-head div{text-align:center;font-size:11px;font-weight:700;color:var(--muted);}
@@ -306,4 +310,5 @@ button{font-family:inherit;}
   .todo-badge-chip.unlocked{background:linear-gradient(135deg,#4a3a1c,#5c4720);}
   .month-cal-cell{background:#1f1e26;}
   .month-cal-cell.done{background:linear-gradient(135deg,#1f4d38,#2c6b4d);color:#8be8b0;}
+  .todo-badge-hint{background:#3a3020;color:#ffd76b;}
 }
