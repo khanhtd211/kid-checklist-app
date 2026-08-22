@@ -96,9 +96,12 @@ function loadAppData(){
   }catch(e){ return defaultAppData(); }
 }
 
-function saveAppData(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(appData)); }
+function saveAppData(){
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(appData));
+  if(getSyncCode()) schedulePush();
+}
 
-let appData = loadAppData();
+function normalizeAppData(){
 // Migrate/normalize fields for data saved before the PIN & star-history feature existed
 if(typeof appData.parentPin === 'undefined') appData.parentPin = null;
 (appData.profiles || []).forEach(p=>{
@@ -143,6 +146,10 @@ if(typeof appData.parentPin === 'undefined') appData.parentPin = null;
     }
   });
 });
+}
+
+let appData = loadAppData();
+normalizeAppData();
 
 function getProfile(id){ return appData.profiles.find(p=>p.id===id); }
 function activeProfile(){ return getProfile(appData.activeProfileId) || appData.profiles[0]; }
@@ -739,6 +746,8 @@ function renderSettings(){
       ? '🔒 Đã đặt mã PIN — cần nhập mã này mỗi khi tặng sao.'
       : '⚠️ Chưa đặt mã PIN — hãy đặt để chỉ Bố/Mẹ mới tặng sao được.';
   }
+
+  renderSyncSettings();
 }
 
 function deleteTask(id){
@@ -1353,6 +1362,179 @@ function renderAll(){
   if(activePage && activePage.id === 'page-voucher') renderVouchersPage();
   if(activePage && activePage.id === 'page-settings') renderSettings();
   if(activePage && activePage.id === 'page-picker') renderPicker();
+}
+
+/* ---------- Đồng bộ nhiều thiết bị qua Firebase (tuỳ chọn) ---------- */
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyADHMVXLZiiNt23HKygAZHfbVPE9BmdKHE",
+  authDomain: "kid-checklist-14544.firebaseapp.com",
+  projectId: "kid-checklist-14544",
+  storageBucket: "kid-checklist-14544.firebasestorage.app",
+  messagingSenderId: "638904549868",
+  appId: "1:638904549868:web:700bb8b98ec82550c7c0c9"
+};
+const SYNC_CODE_KEY = 'kidChecklistSyncCode_v1';
+let fbApp = null, fbDb = null, fbUnsub = null, syncPushTimer = null, syncApplyingRemote = false;
+
+function getSyncCode(){ return localStorage.getItem(SYNC_CODE_KEY) || null; }
+function setSyncCode(code){ localStorage.setItem(SYNC_CODE_KEY, code); }
+function clearSyncCode(){ localStorage.removeItem(SYNC_CODE_KEY); }
+
+function genSyncCode(){
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // tránh ký tự dễ nhầm 0/O, 1/I/L
+  let s = '';
+  for(let i=0;i<10;i++) s += chars[Math.floor(Math.random()*chars.length)];
+  return s;
+}
+
+function initFirebase(){
+  if(fbApp) return true;
+  if(typeof firebase === 'undefined') return false;
+  try{
+    fbApp = firebase.initializeApp(FIREBASE_CONFIG);
+    fbDb = firebase.firestore();
+    try{ fbDb.enablePersistence({ synchronizeTabs: true }); }catch(e){ /* nhiều tab hoặc trình duyệt không hỗ trợ — bỏ qua */ }
+    return true;
+  }catch(e){ console.error('Firebase init lỗi', e); return false; }
+}
+
+function syncDocRef(){
+  const code = getSyncCode();
+  if(!code || !fbDb) return null;
+  return fbDb.collection('families').doc(code);
+}
+
+function pushToCloud(){
+  const ref = syncDocRef();
+  if(!ref || syncApplyingRemote) return;
+  appData.updatedAt = Date.now();
+  ref.set({ json: JSON.stringify(appData), updatedAt: appData.updatedAt }).catch(err=>{
+    console.error('Đồng bộ lên mây lỗi', err);
+  });
+}
+function schedulePush(){
+  clearTimeout(syncPushTimer);
+  syncPushTimer = setTimeout(pushToCloud, 800);
+}
+
+function startSyncListener(){
+  const ref = syncDocRef();
+  if(!ref) return;
+  if(fbUnsub){ fbUnsub(); fbUnsub = null; }
+  fbUnsub = ref.onSnapshot(snap=>{
+    if(!snap.exists) return;
+    const remote = snap.data();
+    if(!remote || !remote.json) return;
+    if(remote.updatedAt && remote.updatedAt <= (appData.updatedAt || 0)) return;
+    try{
+      syncApplyingRemote = true;
+      appData = JSON.parse(remote.json);
+      normalizeAppData();
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(appData));
+      renderAll();
+    }catch(e){
+      console.error('Không đọc được dữ liệu đồng bộ', e);
+    }finally{
+      syncApplyingRemote = false;
+    }
+  }, err=>{ console.error('Lỗi lắng nghe đồng bộ', err); });
+}
+
+function createSyncCodeFlow(){
+  if(!confirm('Tạo mã đồng bộ mới? Toàn bộ dữ liệu hiện tại trên máy này sẽ được tải lên để chia sẻ với các thiết bị khác.')) return;
+  if(!initFirebase()){ alert('Không tải được thư viện đồng bộ. Kiểm tra kết nối mạng rồi thử lại nhé.'); return; }
+  const code = genSyncCode();
+  setSyncCode(code);
+  appData.updatedAt = Date.now();
+  syncDocRef().set({ json: JSON.stringify(appData), updatedAt: appData.updatedAt })
+    .then(()=>{
+      startSyncListener();
+      renderSyncSettings();
+      alert(`Đã tạo mã đồng bộ: ${code}\n\nGhi lại mã này và nhập vào các thiết bị khác (trong Cài đặt → Đồng bộ nhiều thiết bị) để dùng chung dữ liệu nhé!`);
+    })
+    .catch(err=>{
+      clearSyncCode();
+      alert('Không tạo được đồng bộ, kiểm tra lại kết nối mạng. Lỗi: ' + err.message);
+    });
+}
+
+function joinSyncCodeFlow(){
+  const codeInput = document.getElementById('syncJoinInput');
+  const code = (codeInput.value || '').trim().toUpperCase();
+  if(!code){ alert('Nhập mã đồng bộ nhé!'); return; }
+  if(!confirm('Kết nối sẽ TẢI dữ liệu từ mã này về và THAY THẾ toàn bộ dữ liệu hiện có trên máy này. Chắc chắn tiếp tục?')) return;
+  if(!initFirebase()){ alert('Không tải được thư viện đồng bộ. Kiểm tra kết nối mạng rồi thử lại nhé.'); return; }
+  fbDb.collection('families').doc(code).get().then(snap=>{
+    if(!snap.exists || !snap.data() || !snap.data().json){
+      alert('Không tìm thấy mã đồng bộ này. Kiểm tra lại mã nhé.');
+      return;
+    }
+    try{
+      appData = JSON.parse(snap.data().json);
+      setSyncCode(code);
+      normalizeAppData();
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(appData));
+      startSyncListener();
+      renderAll();
+      renderSyncSettings();
+      alert('Kết nối thành công! Dữ liệu đã được đồng bộ.');
+    }catch(e){
+      alert('Dữ liệu của mã này bị lỗi, không đọc được.');
+    }
+  }).catch(err=>{
+    alert('Không kết nối được, kiểm tra mạng rồi thử lại. Lỗi: ' + err.message);
+  });
+}
+
+function stopSyncFlow(){
+  if(!confirm('Ngừng đồng bộ? Dữ liệu trên máy này vẫn được giữ nguyên, chỉ không còn tự động cập nhật qua các thiết bị khác nữa.')) return;
+  if(fbUnsub){ fbUnsub(); fbUnsub = null; }
+  clearSyncCode();
+  renderSyncSettings();
+}
+
+function renderSyncSettings(){
+  const areaEl = document.getElementById('syncSetupArea');
+  const statusEl = document.getElementById('syncStatusText');
+  if(!areaEl || !statusEl) return;
+  const code = getSyncCode();
+  if(!code){
+    statusEl.textContent = '⚪ Chưa bật đồng bộ — dữ liệu chỉ đang lưu trên máy này.';
+    areaEl.innerHTML = `
+      <button class="add-btn" id="syncCreateBtn" style="margin-bottom:14px">🆕 Tạo mã đồng bộ (thiết bị đầu tiên)</button>
+      <div style="text-align:center;color:var(--muted);font-size:12px;margin:2px 0 10px">hoặc</div>
+      <div class="field">
+        <label>Nhập mã đồng bộ từ thiết bị khác</label>
+        <input type="text" id="syncJoinInput" placeholder="VD: A1B2C3D4E5" style="text-transform:uppercase">
+      </div>
+      <button class="btn-primary" id="syncJoinBtn" style="width:100%">🔗 Kết nối</button>
+    `;
+    document.getElementById('syncCreateBtn').addEventListener('click', createSyncCodeFlow);
+    document.getElementById('syncJoinBtn').addEventListener('click', ()=>{
+      if(!appData.parentPin){ openPinSetupModal(joinSyncCodeFlow); } else { openPinVerifyModal(joinSyncCodeFlow); }
+    });
+  } else {
+    statusEl.textContent = '🟢 Đã bật đồng bộ nhiều thiết bị.';
+    areaEl.innerHTML = `
+      <div class="field">
+        <label>Mã đồng bộ của gia đình bạn (nhập mã này trên thiết bị khác)</label>
+        <input type="text" id="syncCodeDisplay" value="${code}" readonly style="font-weight:800;letter-spacing:2px;text-align:center">
+      </div>
+      <button class="btn-secondary" id="syncCopyBtn" style="width:100%;margin-bottom:10px">📋 Sao chép mã</button>
+      <button class="btn-danger-outline" id="syncStopBtn" style="width:100%">🔌 Ngừng đồng bộ trên máy này</button>
+    `;
+    document.getElementById('syncCopyBtn').addEventListener('click', ()=>{
+      const input = document.getElementById('syncCodeDisplay');
+      input.select();
+      if(navigator.clipboard) navigator.clipboard.writeText(code).catch(()=>{});
+      alert('Đã sao chép mã: ' + code);
+    });
+    document.getElementById('syncStopBtn').addEventListener('click', stopSyncFlow);
+  }
+}
+
+if(getSyncCode() && initFirebase()){
+  startSyncListener();
 }
 
 document.addEventListener('DOMContentLoaded', ()=>{

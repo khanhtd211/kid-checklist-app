@@ -158,6 +158,7 @@ button{font-family:inherit;}
 .voucher-use-btn{background:var(--green);color:#fff;border:none;border-radius:10px;padding:6px 10px;font-weight:800;font-size:12px;white-space:nowrap;}
 .voucher-refund-btn{background:#fff;color:var(--red);border:1.5px solid var(--red);border-radius:10px;padding:5px 10px;font-weight:800;font-size:12px;white-space:nowrap;}
 .modal-hint{font-size:12px;color:var(--muted);margin:-4px 0 14px;line-height:1.4;}
+.btn-danger-outline{background:#fff;color:var(--red);border:1.5px solid var(--red);border-radius:14px;padding:14px;font-weight:800;font-size:15px;}
 
 .streak-badge{
   display:flex;align-items:center;gap:6px;background:linear-gradient(135deg,#ff9a56,#ff6b6b);color:#fff;
@@ -311,4 +312,5 @@ button{font-family:inherit;}
   .month-cal-cell{background:#1f1e26;}
   .month-cal-cell.done{background:linear-gradient(135deg,#1f4d38,#2c6b4d);color:#8be8b0;}
   .todo-badge-hint{background:#3a3020;color:#ffd76b;}
+  .btn-danger-outline{background:transparent;}
 }
