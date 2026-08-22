@@ -121,6 +121,14 @@
     </div>
 
     <div class="card">
+      <div class="section-title">💾 Sao lưu dữ liệu</div>
+      <div style="font-size:13px;color:var(--muted);margin-bottom:10px">Dữ liệu chỉ lưu trên thiết bị này. Nên xuất file sao lưu định kỳ và lưu vào iCloud/Files hoặc gửi qua email để tránh mất dữ liệu.</div>
+      <button class="add-btn" id="exportDataBtn">⬇️ Xuất dữ liệu ra file</button>
+      <button class="add-btn" id="importDataBtn" style="background:#4cd3a5;margin-top:8px">⬆️ Nhập dữ liệu từ file</button>
+      <input type="file" id="importFileInput" accept="application/json,.json" style="display:none">
+    </div>
+
+    <div class="card">
       <div class="section-title">✅ Danh sách việc cần làm</div>
       <div id="settingsTaskList"></div>
       <button class="add-btn" id="addTaskBtn">+ Thêm việc</button>

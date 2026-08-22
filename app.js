@@ -465,6 +465,49 @@ function deleteReward(id){
   saveAppData(); renderAll();
 }
 
+/* ---------- Backup: Export / Import ---------- */
+function exportData(){
+  const dataStr = JSON.stringify(appData, null, 2);
+  const blob = new Blob([dataStr], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `kid-checklist-backup-${todayKey()}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(()=>URL.revokeObjectURL(url), 2000);
+}
+
+function importDataFile(file){
+  const reader = new FileReader();
+  reader.onload = (e)=>{
+    let parsed;
+    try{
+      parsed = JSON.parse(e.target.result);
+    }catch(err){
+      alert('Không đọc được file. Hãy chắc chắn đây là file sao lưu hợp lệ (.json).');
+      return;
+    }
+    if(!parsed || !Array.isArray(parsed.profiles) || !parsed.profiles.length){
+      alert('File không đúng định dạng sao lưu của app này.');
+      return;
+    }
+    if(!confirm('Nhập dữ liệu sẽ THAY THẾ TOÀN BỘ dữ liệu hiện tại trên máy này (việc, sao, lịch sử...). Bạn có chắc chắn?')) return;
+
+    appData = parsed;
+    if(typeof appData.parentPin === 'undefined') appData.parentPin = null;
+    appData.profiles.forEach(p=>{ if(!Array.isArray(p.starHistory)) p.starHistory = []; });
+    if(!appData.activeProfileId || !getProfile(appData.activeProfileId)){
+      appData.activeProfileId = appData.profiles[0].id;
+    }
+    saveAppData();
+    renderAll();
+    alert('Đã nhập dữ liệu thành công!');
+  };
+  reader.readAsText(file);
+}
+
 /* ---------- Parent PIN ---------- */
 let pinSuccessCallback = null;
 
@@ -892,6 +935,22 @@ document.addEventListener('DOMContentLoaded', ()=>{
     } else {
       openPinSetupModal(null);
     }
+  });
+
+  // Sao lưu dữ liệu: xuất không cần PIN (chỉ đọc), nhập cần PIN vì sẽ ghi đè toàn bộ data
+  document.getElementById('exportDataBtn').addEventListener('click', exportData);
+  document.getElementById('importDataBtn').addEventListener('click', ()=>{
+    const openPicker = ()=> document.getElementById('importFileInput').click();
+    if(!appData.parentPin){
+      openPinSetupModal(openPicker);
+    } else {
+      openPinVerifyModal(openPicker);
+    }
+  });
+  document.getElementById('importFileInput').addEventListener('change', (e)=>{
+    const file = e.target.files[0];
+    if(file) importDataFile(file);
+    e.target.value = '';
   });
 
   document.getElementById('pinSetupCancelBtn').addEventListener('click', closePinSetupModal);
