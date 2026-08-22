@@ -159,6 +159,10 @@
   <div class="page" id="page-settings">
     <div class="topbar">
       <div class="greet">Cài đặt (Ba/Mẹ)</div>
+      <div style="display:flex;gap:8px;flex-shrink:0">
+        <button class="icon-btn" id="managePinBtn" title="Bảo mật / mã PIN">🔒</button>
+        <button class="icon-btn" id="openDataManageBtn" title="Quản lý dữ liệu &amp; Đồng bộ thiết bị">🗄️</button>
+      </div>
     </div>
 
     <div class="card">
@@ -167,26 +171,6 @@
         <label>Tên bé</label>
         <input type="text" id="childNameInput" placeholder="Tên bé">
       </div>
-    </div>
-
-    <div class="card">
-      <div class="section-title">🔒 Bảo mật</div>
-      <div id="pinStatusText" style="font-size:13px;color:var(--muted);margin-bottom:10px"></div>
-      <button class="add-btn" id="managePinBtn">Đặt / Đổi mã PIN Bố Mẹ</button>
-    </div>
-
-    <div class="card">
-      <div class="section-title">💾 Sao lưu dữ liệu</div>
-      <div style="font-size:13px;color:var(--muted);margin-bottom:10px">Dữ liệu chỉ lưu trên thiết bị này. Nên xuất file sao lưu định kỳ và lưu vào iCloud/Files hoặc gửi qua email để tránh mất dữ liệu.</div>
-      <button class="add-btn" id="exportDataBtn">⬇️ Xuất dữ liệu ra file</button>
-      <button class="add-btn" id="importDataBtn" style="background:#4cd3a5;margin-top:8px">⬆️ Nhập dữ liệu từ file</button>
-      <input type="file" id="importFileInput" accept="application/json,.json" style="display:none">
-    </div>
-
-    <div class="card">
-      <div class="section-title">🔄 Đồng bộ nhiều thiết bị</div>
-      <div class="modal-hint" id="syncStatusText" style="margin-top:0">⚪ Chưa bật đồng bộ — dữ liệu chỉ đang lưu trên máy này.</div>
-      <div id="syncSetupArea"></div>
     </div>
 
     <div class="card">
@@ -205,6 +189,30 @@
       <div class="section-title">🏆 Mốc thưởng theo số sao</div>
       <div id="settingsRewardList"></div>
       <button class="add-btn" id="addRewardBtn">+ Thêm mốc thưởng</button>
+    </div>
+  </div>
+
+  <!-- DATA MANAGE (Sao lưu & Đồng bộ — dành riêng cho admin gia đình) -->
+  <div class="page" id="page-datamanage">
+    <div class="topbar">
+      <button class="icon-btn" id="backFromDataManage">←</button>
+      <div class="topbar-mid">
+        <div class="greet">🗄️ Quản lý dữ liệu</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="section-title">💾 Sao lưu dữ liệu</div>
+      <div style="font-size:13px;color:var(--muted);margin-bottom:10px">Dữ liệu chỉ lưu trên thiết bị này. Nên xuất file sao lưu định kỳ và lưu vào iCloud/Files hoặc gửi qua email để tránh mất dữ liệu.</div>
+      <button class="add-btn" id="exportDataBtn">⬇️ Xuất dữ liệu ra file</button>
+      <button class="add-btn" id="importDataBtn" style="background:#4cd3a5;margin-top:8px">⬆️ Nhập dữ liệu từ file</button>
+      <input type="file" id="importFileInput" accept="application/json,.json" style="display:none">
+    </div>
+
+    <div class="card">
+      <div class="section-title">🔄 Đồng bộ nhiều thiết bị</div>
+      <div class="modal-hint" id="syncStatusText" style="margin-top:0">⚪ Chưa bật đồng bộ — dữ liệu chỉ đang lưu trên máy này.</div>
+      <div id="syncSetupArea"></div>
     </div>
   </div>
 

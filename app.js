@@ -740,14 +740,13 @@ function renderSettings(){
     </div>
   `).join('') || `<div class="empty-state">Chưa có mốc thưởng nào.</div>`;
 
-  const pinStatusEl = document.getElementById('pinStatusText');
-  if(pinStatusEl){
-    pinStatusEl.textContent = appData.parentPin
-      ? '🔒 Đã đặt mã PIN — cần nhập mã này mỗi khi tặng sao.'
-      : '⚠️ Chưa đặt mã PIN — hãy đặt để chỉ Bố/Mẹ mới tặng sao được.';
+  const pinBtn = document.getElementById('managePinBtn');
+  if(pinBtn){
+    pinBtn.textContent = appData.parentPin ? '🔒' : '🔓';
+    pinBtn.title = appData.parentPin
+      ? 'Đã đặt mã PIN — bấm để đổi'
+      : 'Chưa đặt mã PIN — bấm để đặt (nên đặt để chỉ Bố/Mẹ mới tặng/thu hồi/đổi sao được)';
   }
-
-  renderSyncSettings();
 }
 
 function deleteTask(id){
@@ -1342,7 +1341,7 @@ function switchTab(name){
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.getElementById('page-'+name).classList.add('active');
   document.querySelectorAll('.tabbar button').forEach(b=>b.classList.toggle('active', b.dataset.tab===name));
-  document.getElementById('tabbar').style.display = (name==='picker') ? 'none' : 'flex';
+  document.getElementById('tabbar').style.display = (name==='picker' || name==='datamanage') ? 'none' : 'flex';
   if(name==='today') renderToday();
   if(name==='todo') renderTodoPage();
   if(name==='stats') renderStats();
@@ -1350,6 +1349,7 @@ function switchTab(name){
   if(name==='voucher') renderVouchersPage();
   if(name==='settings') renderSettings();
   if(name==='picker') renderPicker();
+  if(name==='datamanage') renderSyncSettings();
 }
 
 /* ---------- Init ---------- */
@@ -1362,6 +1362,7 @@ function renderAll(){
   if(activePage && activePage.id === 'page-voucher') renderVouchersPage();
   if(activePage && activePage.id === 'page-settings') renderSettings();
   if(activePage && activePage.id === 'page-picker') renderPicker();
+  if(activePage && activePage.id === 'page-datamanage') renderSyncSettings();
 }
 
 /* ---------- Đồng bộ nhiều thiết bị qua Firebase (tuỳ chọn) ---------- */
@@ -1420,6 +1421,7 @@ function schedulePush(){
 function startSyncListener(){
   const ref = syncDocRef();
   if(!ref) return;
+  maybeAutoBackup();
   if(fbUnsub){ fbUnsub(); fbUnsub = null; }
   fbUnsub = ref.onSnapshot(snap=>{
     if(!snap.exists) return;
@@ -1493,6 +1495,61 @@ function stopSyncFlow(){
   renderSyncSettings();
 }
 
+/* ---------- Sao lưu tự động hàng tuần lên Firebase (khi đã bật đồng bộ) ---------- */
+function currentWeekKey(){
+  return toKey(startOfWeek(todayDate()));
+}
+function backupDocRef(){
+  const code = getSyncCode();
+  if(!code || !fbDb) return null;
+  return fbDb.collection('backups').doc(code);
+}
+function fmtDateFull(ts){
+  const d = new Date(ts);
+  if(isNaN(d.getTime())) return '';
+  return `${pad(d.getDate())}/${pad(d.getMonth()+1)}/${d.getFullYear()}`;
+}
+function maybeAutoBackup(){
+  const ref = backupDocRef();
+  if(!ref) return;
+  const weekKey = currentWeekKey();
+  ref.get().then(snap=>{
+    const data = snap.exists ? snap.data() : null;
+    if(data && data.weekKey === weekKey) return; // tuần này đã sao lưu rồi
+    // Ghi đè lên đúng 1 document — bản sao lưu mới thay thế bản cũ, không giữ lịch sử nhiều bản
+    return ref.set({ weekKey, json: JSON.stringify(appData), createdAt: Date.now() });
+  }).then(()=> renderSyncSettings())
+    .catch(err=> console.error('Sao lưu tự động lên mây lỗi', err));
+}
+
+function restoreFromBackupFlow(){
+  const ref = backupDocRef();
+  if(!ref) return;
+  ref.get().then(snap=>{
+    if(!snap.exists || !snap.data() || !snap.data().json){
+      alert('Chưa có bản sao lưu tự động nào trên mây.');
+      return;
+    }
+    const data = snap.data();
+    if(!confirm(`Khôi phục bản sao lưu ngày ${fmtDateFull(data.createdAt)}? Dữ liệu hiện tại trên máy này sẽ bị THAY THẾ.`)) return;
+    try{
+      appData = JSON.parse(data.json);
+      normalizeAppData();
+      saveAppData();
+      renderAll();
+      renderSyncSettings();
+      alert('Đã khôi phục xong!');
+    }catch(e){
+      alert('Bản sao lưu bị lỗi, không đọc được.');
+    }
+  }).catch(err=>{
+    alert('Không kết nối được, kiểm tra mạng rồi thử lại. Lỗi: ' + err.message);
+  });
+}
+function requestRestoreFromBackup(){
+  if(!appData.parentPin){ openPinSetupModal(restoreFromBackupFlow); } else { openPinVerifyModal(restoreFromBackupFlow); }
+}
+
 function renderSyncSettings(){
   const areaEl = document.getElementById('syncSetupArea');
   const statusEl = document.getElementById('syncStatusText');
@@ -1507,7 +1564,7 @@ function renderSyncSettings(){
         <label>Nhập mã đồng bộ từ thiết bị khác</label>
         <input type="text" id="syncJoinInput" placeholder="VD: A1B2C3D4E5" style="text-transform:uppercase">
       </div>
-      <button class="btn-primary" id="syncJoinBtn" style="width:100%">🔗 Kết nối</button>
+      <button class="add-btn" id="syncJoinBtn">🔗 Kết nối</button>
     `;
     document.getElementById('syncCreateBtn').addEventListener('click', createSyncCodeFlow);
     document.getElementById('syncJoinBtn').addEventListener('click', ()=>{
@@ -1521,6 +1578,8 @@ function renderSyncSettings(){
         <input type="text" id="syncCodeDisplay" value="${code}" readonly style="font-weight:800;letter-spacing:2px;text-align:center">
       </div>
       <button class="btn-secondary" id="syncCopyBtn" style="width:100%;margin-bottom:10px">📋 Sao chép mã</button>
+      <div class="modal-hint" id="syncBackupStatus" style="margin-top:0">📦 Sao lưu tự động hàng tuần: đang kiểm tra…</div>
+      <button class="btn-secondary" id="syncRestoreBtn" style="width:100%;margin-bottom:10px">🗄️ Khôi phục bản sao lưu tự động</button>
       <button class="btn-danger-outline" id="syncStopBtn" style="width:100%">🔌 Ngừng đồng bộ trên máy này</button>
     `;
     document.getElementById('syncCopyBtn').addEventListener('click', ()=>{
@@ -1529,7 +1588,24 @@ function renderSyncSettings(){
       if(navigator.clipboard) navigator.clipboard.writeText(code).catch(()=>{});
       alert('Đã sao chép mã: ' + code);
     });
+    document.getElementById('syncRestoreBtn').addEventListener('click', requestRestoreFromBackup);
     document.getElementById('syncStopBtn').addEventListener('click', stopSyncFlow);
+
+    const ref = backupDocRef();
+    if(ref){
+      ref.get().then(snap=>{
+        const el = document.getElementById('syncBackupStatus');
+        if(!el) return;
+        if(snap.exists && snap.data() && snap.data().createdAt){
+          el.textContent = `📦 Sao lưu tự động gần nhất: ${fmtDateFull(snap.data().createdAt)} (tuần trước sẽ tự bị thay khi có bản mới)`;
+        } else {
+          el.textContent = '📦 Chưa có bản sao lưu tự động nào (sẽ tạo trong lần mở app đầu tuần tới).';
+        }
+      }).catch(()=>{
+        const el = document.getElementById('syncBackupStatus');
+        if(el) el.textContent = '📦 Không kiểm tra được trạng thái sao lưu (kiểm tra mạng).';
+      });
+    }
   }
 }
 
@@ -1546,6 +1622,8 @@ document.addEventListener('DOMContentLoaded', ()=>{
 
   document.getElementById('switchAvatarToday').addEventListener('click', ()=> switchTab('picker'));
   document.getElementById('backFromPicker').addEventListener('click', ()=> switchTab('today'));
+  document.getElementById('openDataManageBtn').addEventListener('click', ()=> switchTab('datamanage'));
+  document.getElementById('backFromDataManage').addEventListener('click', ()=> switchTab('settings'));
 
   document.getElementById('childNameInput').addEventListener('change', (e)=>{
     activeProfile().name = e.target.value.trim() || 'Bé';
