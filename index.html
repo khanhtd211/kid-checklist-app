@@ -55,6 +55,40 @@
     <div id="taskList"></div>
   </div>
 
+  <!-- TODO (không bắt buộc) -->
+  <div class="page" id="page-todo">
+    <div class="topbar">
+      <div class="topbar-mid">
+        <div class="greet">🗒️ To-do hôm nay</div>
+        <div class="date" id="todoDate"></div>
+      </div>
+      <div class="streak-badge" id="todoStreakBadge" style="display:none">🔥 0 ngày</div>
+    </div>
+
+    <div class="progress-wrap">
+      <div class="progress-label">
+        <span id="todoProgressLabel">0/0 việc đã làm</span>
+        <span id="todoProgressPct">0%</span>
+      </div>
+      <div class="progress-track"><div class="progress-fill todo-fill" id="todoProgressFill" style="width:0%"></div></div>
+    </div>
+
+    <div class="todo-hint">💡 Đây là việc bé nên làm, không bắt buộc và không tính vào sao thưởng. Làm đều mỗi ngày để giữ chuỗi 🔥 và mở khoá huy hiệu nhé!</div>
+
+    <div id="todoList"></div>
+
+    <div class="card">
+      <div class="section-title" id="todoCalTitle">🗓️ Lịch theo dõi</div>
+      <div class="month-cal-head" id="todoCalHead"></div>
+      <div class="month-cal-grid" id="todoCalGrid"></div>
+    </div>
+
+    <div class="card">
+      <div class="section-title">🏅 Huy hiệu chăm chỉ</div>
+      <div class="todo-badge-grid" id="todoBadgeList"></div>
+    </div>
+  </div>
+
   <!-- STATS -->
   <div class="page" id="page-stats">
     <div class="topbar">
@@ -78,7 +112,7 @@
     </div>
 
     <div class="card">
-      <div class="section-title">📝 Việc còn thiếu trong tuần</div>
+      <div class="section-title">📋 Việc còn thiếu trong tuần</div>
       <div id="missTasks"></div>
     </div>
   </div>
@@ -97,6 +131,26 @@
     <div class="card">
       <div class="section-title">📜 Toàn bộ lịch sử</div>
       <div id="historyList"></div>
+    </div>
+  </div>
+
+  <!-- VOUCHER (Kho phiếu quà) -->
+  <div class="page" id="page-voucher">
+    <div class="topbar">
+      <div class="topbar-mid">
+        <div class="greet" id="voucherProfileName">Kho phiếu quà tặng</div>
+      </div>
+      <button class="star-manage-btn" id="giftVoucherBtn" title="Tặng phiếu quà cho bé, không cần tốn sao">🎁</button>
+    </div>
+
+    <div class="card">
+      <div class="section-title">🎫 Phiếu chưa dùng</div>
+      <div id="voucherUnusedList"></div>
+    </div>
+
+    <div class="card">
+      <div class="section-title">✅ Phiếu đã dùng</div>
+      <div id="voucherUsedList"></div>
     </div>
   </div>
 
@@ -129,9 +183,15 @@
     </div>
 
     <div class="card">
-      <div class="section-title">✅ Danh sách việc cần làm</div>
+      <div class="section-title">📋 Danh sách việc cần làm (checklist, có sao thưởng)</div>
       <div id="settingsTaskList"></div>
       <button class="add-btn" id="addTaskBtn">+ Thêm việc</button>
+    </div>
+
+    <div class="card">
+      <div class="section-title">🗒️ Danh sách To-do (không bắt buộc)</div>
+      <div id="settingsTodoList"></div>
+      <button class="add-btn" id="addTodoBtn" style="background:#4fa8ff">+ Thêm việc to-do</button>
     </div>
 
     <div class="card">
@@ -144,9 +204,11 @@
 </div>
 
 <div class="tabbar" id="tabbar">
-  <button class="active" data-tab="today"><span class="icon">✅</span>Hôm nay</button>
-  <button data-tab="stats"><span class="icon">📊</span>Thống kê</button>
+  <button class="active" data-tab="today"><span class="icon-wrap"><span class="icon">📋</span><span class="tab-badge today" id="tabBadgeToday"></span></span>Hôm nay</button>
+  <button data-tab="todo"><span class="icon-wrap"><span class="icon">🗒️</span><span class="tab-badge todo" id="tabBadgeTodo"></span></span>To-do</button>
+  <button data-tab="voucher"><span class="icon-wrap"><span class="icon">🎫</span><span class="tab-badge voucher" id="tabBadgeVoucher"></span></span>Phiếu quà</button>
   <button data-tab="history"><span class="icon">📜</span>Lịch sử</button>
+  <button data-tab="stats"><span class="icon">📊</span>Thống kê</button>
   <button data-tab="settings"><span class="icon">⚙️</span>Cài đặt</button>
 </div>
 
@@ -174,6 +236,30 @@
   </div>
 </div>
 
+<!-- Todo modal (không bắt buộc) -->
+<div class="overlay" id="todoModal">
+  <div class="sheet">
+    <h3 id="todoModalTitle">Thêm việc to-do mới</h3>
+    <div class="field">
+      <label>Tên việc</label>
+      <input type="text" id="todoTitleInput" placeholder="VD: Uống thuốc">
+    </div>
+    <div class="field">
+      <label>Biểu tượng</label>
+      <div class="emoji-picker" id="todoEmojiPicker"></div>
+      <input type="hidden" id="todoEmojiInput">
+    </div>
+    <div class="field">
+      <label>Áp dụng vào ngày nào</label>
+      <div class="days-row" id="todoDaysRow"></div>
+    </div>
+    <div class="sheet-actions">
+      <button class="btn-secondary" id="todoCancelBtn">Huỷ</button>
+      <button class="btn-primary" id="todoSaveBtn" style="background:#4fa8ff">Lưu</button>
+    </div>
+  </div>
+</div>
+
 <!-- Reward modal -->
 <div class="overlay" id="rewardModal">
   <div class="sheet">
@@ -194,6 +280,38 @@
     <div class="sheet-actions">
       <button class="btn-secondary" id="rewardCancelBtn">Huỷ</button>
       <button class="btn-primary" id="rewardSaveBtn">Lưu</button>
+    </div>
+  </div>
+</div>
+
+<!-- To-do day detail modal -->
+<div class="overlay" id="todoDayDetailModal">
+  <div class="sheet">
+    <h3 id="todoDayDetailTitle">Ngày ...</h3>
+    <div id="todoDayDetailList"></div>
+    <div class="sheet-actions">
+      <button class="btn-primary" id="todoDayDetailCloseBtn" style="flex:1">Đóng</button>
+    </div>
+  </div>
+</div>
+
+<!-- Gift voucher modal -->
+<div class="overlay" id="giftVoucherModal">
+  <div class="sheet">
+    <h3>🎁 Tặng phiếu quà cho bé</h3>
+    <div class="field">
+      <label>Nội dung phiếu quà</label>
+      <input type="text" id="giftVoucherTitleInput" placeholder="VD: 15 phút chơi game">
+    </div>
+    <div class="field">
+      <label>Biểu tượng</label>
+      <div class="emoji-picker" id="giftVoucherEmojiPicker"></div>
+      <input type="hidden" id="giftVoucherEmojiInput">
+    </div>
+    <p class="modal-hint">Phiếu này không trừ sao của bé, chỉ là quà bố mẹ tặng thêm.</p>
+    <div class="sheet-actions">
+      <button class="btn-secondary" id="giftVoucherCancelBtn">Huỷ</button>
+      <button class="btn-primary" id="giftVoucherSaveBtn">Tặng phiếu</button>
     </div>
   </div>
 </div>

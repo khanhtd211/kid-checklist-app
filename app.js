@@ -29,6 +29,12 @@ function defaultTasks(){
     { id: uid(), title: 'Đọc sách 15 phút', emoji: '📖', days:[0,1,2,3,4,5,6] },
   ];
 }
+function defaultTodos(){
+  return [
+    { id: uid(), title: 'Uống thuốc', emoji: '💊', days:[0,1,2,3,4,5,6] },
+    { id: uid(), title: 'Uống sữa', emoji: '🥛', days:[0,1,2,3,4,5,6] },
+  ];
+}
 function defaultRewards(){
   return [
     { id: uid(), threshold: 5, title: 'Xem phim hoạt hình', emoji: '🎬' },
@@ -47,6 +53,10 @@ function newProfile(name, avatar){
     starDays: {},    // { 'YYYY-MM-DD': true } -> a star was earned that day
     stars: 0,
     starHistory: [], // [{ id, type:'complete'|'gift', dateKey, amount, reason, emoji, at }]
+    todos: defaultTodos(),  // việc nên làm, không bắt buộc, không tính sao
+    todoLogs: {},           // { 'YYYY-MM-DD': { todoId: true } }
+    todoBadges: [],         // [3, 7, 14, ...] mốc chuỗi ngày đã mở khoá, không liên quan sao
+    vouchers: [],           // [{ id, title, emoji, cost, status:'unused'|'used', redeemedAt, usedAt }]
   };
 }
 function defaultAppData(){
@@ -77,6 +87,8 @@ function loadAppData(){
         starDays: l.starDays || {},
         stars: l.stars || 0,
         starHistory: [],
+        todos: [],
+        todoLogs: {},
       };
       return { profiles: [p], activeProfileId: p.id, parentPin: null };
     }
@@ -90,6 +102,9 @@ let appData = loadAppData();
 // Migrate/normalize fields for data saved before the PIN & star-history feature existed
 if(typeof appData.parentPin === 'undefined') appData.parentPin = null;
 (appData.profiles || []).forEach(p=>{
+  if(!Array.isArray(p.todos)) p.todos = [];
+  if(!p.todoLogs || typeof p.todoLogs !== 'object') p.todoLogs = {};
+  if(!Array.isArray(p.todoBadges)) p.todoBadges = [];
   if(!Array.isArray(p.starHistory)){
     const hist = [];
     Object.keys(p.starDays || {}).forEach(dateKey=>{
@@ -103,6 +118,22 @@ if(typeof appData.parentPin === 'undefined') appData.parentPin = null;
     });
     hist.sort((a,b)=>(b.at||0)-(a.at||0));
     p.starHistory = hist;
+  }
+  if(!Array.isArray(p.vouchers)){
+    // Tạo phiếu quà từ các lần đổi thưởng trước đây (khi chưa có hệ thống phiếu) — mặc định "chưa dùng"
+    const vouchers = [];
+    (p.starHistory || []).filter(h=>h.type==='redeem').forEach(h=>{
+      vouchers.push({
+        id: uid('v'),
+        title: h.reason,
+        emoji: h.emoji || '🎫',
+        cost: Math.abs(h.amount),
+        status: 'unused',
+        redeemedAt: h.at || Date.now(),
+        usedAt: null,
+      });
+    });
+    p.vouchers = vouchers;
   }
 });
 
@@ -145,6 +176,98 @@ function progressFor(d){
   const list = tasksForDate(d);
   const done = list.filter(t => isDone(key, t.id)).length;
   return { done, total: list.length };
+}
+
+/* ---------- Core logic: To-do (không bắt buộc, không tính sao) ---------- */
+function todosForDate(d){
+  const wd = weekdayOf(d);
+  return activeProfile().todos.filter(t => t.days.includes(wd));
+}
+function isTodoDone(dateKey, todoId){
+  const p = activeProfile();
+  return !!(p.todoLogs[dateKey] && p.todoLogs[dateKey][todoId]);
+}
+function setTodoDone(dateKey, todoId, val){
+  const p = activeProfile();
+  if(!p.todoLogs[dateKey]) p.todoLogs[dateKey] = {};
+  if(val) p.todoLogs[dateKey][todoId] = true;
+  else delete p.todoLogs[dateKey][todoId];
+}
+function toggleTodo(todoId){
+  const key = todayKey();
+  const wasDone = isTodoDone(key, todoId);
+  setTodoDone(key, todoId, !wasDone);
+  saveAppData();
+  const p = activeProfile();
+  const streak = calcTodoStreak();
+  checkTodoBadges(p, streak);
+  renderTodoPage();
+}
+
+/* ---------- Chuỗi ngày & huy hiệu to-do (thúc đẩy, không liên quan sao) ---------- */
+const TODO_STREAK_BADGES = [
+  { days:3,   emoji:'🌱', title:'Mầm chăm chỉ' },
+  { days:7,   emoji:'🔥', title:'Tuần lễ chăm chỉ' },
+  { days:14,  emoji:'⭐', title:'Nửa tháng kiên trì' },
+  { days:30,  emoji:'🏆', title:'Tháng vàng' },
+  { days:60,  emoji:'💎', title:'Bền bỉ 60 ngày' },
+  { days:100, emoji:'👑', title:'Huyền thoại 100 ngày' },
+];
+function calcTodoStreak(){
+  const p = activeProfile();
+  let d = todayDate();
+  const key0 = toKey(d);
+  const list0 = todosForDate(d);
+  const todayComplete = list0.length > 0 && list0.every(t=>isTodoDone(key0, t.id));
+  if(!todayComplete) d = addDays(d, -1);
+
+  let streak = 0;
+  for(let i=0; i<1000; i++){
+    const key = toKey(d);
+    const list = todosForDate(d);
+    if(list.length === 0){ d = addDays(d, -1); continue; } // ngày đó không có to-do nào — bỏ qua, không phá chuỗi
+    const allDone = list.every(t=>isTodoDone(key, t.id));
+    if(!allDone) break;
+    streak++;
+    d = addDays(d, -1);
+  }
+  return streak;
+}
+function checkTodoBadges(p, streak){
+  p.todoBadges = p.todoBadges || [];
+  const newlyUnlocked = TODO_STREAK_BADGES.filter(b => streak >= b.days && !p.todoBadges.includes(b.days));
+  if(newlyUnlocked.length){
+    newlyUnlocked.forEach(b => p.todoBadges.push(b.days));
+    saveAppData();
+    const b = newlyUnlocked[newlyUnlocked.length - 1];
+    showNotifyModal({
+      icon: b.emoji,
+      title: 'Mở khoá huy hiệu mới!',
+      html: `${escapeHtml(p.name)} đã giữ chuỗi <b>${b.days} ngày</b> làm hết to-do!<br><span style="font-size:13px;color:var(--muted)">${b.emoji} ${escapeHtml(b.title)}</span>`,
+      confetti: true,
+    });
+  }
+}
+function renderTodoBadges(p, streak){
+  const el = document.getElementById('todoBadgeList');
+  if(!el) return;
+  const earned = p.todoBadges || [];
+  el.innerHTML = TODO_STREAK_BADGES.map(b=>{
+    const unlocked = earned.includes(b.days);
+    const label = unlocked ? b.title : `Đạt chuỗi ${b.days} ngày để mở khoá "${b.title}"`;
+    return `<div class="todo-badge-chip ${unlocked?'unlocked':'locked'}" title="${escapeHtml(label)}">
+      <span class="todo-badge-emoji">${unlocked ? b.emoji : '🔒'}</span>
+      <span class="todo-badge-days">${b.days} ngày</span>
+    </div>`;
+  }).join('');
+
+  const badgeEl = document.getElementById('todoStreakBadge');
+  if(streak > 0){
+    badgeEl.textContent = `🔥 ${streak} ngày`;
+    badgeEl.style.display = 'inline-flex';
+  } else {
+    badgeEl.style.display = 'none';
+  }
 }
 function nextReward(p){
   p = p || activeProfile();
@@ -215,7 +338,7 @@ function celebrateDeduct(p, amount, emoji, reason){
   showNotifyModal({ icon:'📋', title:'Đã ghi nhận', html, confetti:false });
 }
 function celebrateRedeem(p, r){
-  const html = `${r.emoji} ${escapeHtml(p.name)} đã đổi <b>${r.threshold} ⭐</b> lấy <b>${escapeHtml(r.title)}</b>!<br><span style="font-size:13px;color:var(--muted)">Còn lại: ${p.stars} sao</span>`;
+  const html = `${r.emoji} ${escapeHtml(p.name)} đã đổi <b>${r.threshold} ⭐</b> lấy phiếu <b>${escapeHtml(r.title)}</b>!<br><span style="font-size:13px;color:var(--muted)">Phiếu đã lưu vào tab 🎫 Phiếu quà, dùng khi nào cũng được.<br>Còn lại: ${p.stars} sao</span>`;
   showNotifyModal({ icon:'🎉', title:'Đổi thưởng thành công!', html, confetti:true });
 }
 function spawnConfetti(){
@@ -284,12 +407,145 @@ function renderToday(){
   } else {
     document.getElementById('doneCard').style.display = 'none';
   }
+
+  updateTabBadges();
+}
+
+function updateTabBadges(){
+  const key = todayKey();
+
+  const { done: taskDone, total: taskTotal } = progressFor(todayDate());
+  const todayBadge = document.getElementById('tabBadgeToday');
+  if(taskTotal > 0){
+    todayBadge.textContent = `${taskDone}/${taskTotal}`;
+    todayBadge.style.display = 'inline-block';
+  } else {
+    todayBadge.style.display = 'none';
+  }
+
+  const todoList = todosForDate(todayDate());
+  const todoDone = todoList.filter(t=>isTodoDone(key, t.id)).length;
+  const todoTotal = todoList.length;
+  const todoBadge = document.getElementById('tabBadgeTodo');
+  if(todoTotal > 0){
+    todoBadge.textContent = `${todoDone}/${todoTotal}`;
+    todoBadge.style.display = 'inline-block';
+  } else {
+    todoBadge.style.display = 'none';
+  }
+
+  const p = activeProfile();
+  const unusedVouchers = (p.vouchers || []).filter(v=>v.status!=='used').length;
+  const voucherBadge = document.getElementById('tabBadgeVoucher');
+  if(unusedVouchers > 0){
+    voucherBadge.textContent = unusedVouchers;
+    voucherBadge.style.display = 'inline-block';
+  } else {
+    voucherBadge.style.display = 'none';
+  }
 }
 
 function escapeHtml(s){
   const d = document.createElement('div');
   d.textContent = s;
   return d.innerHTML;
+}
+
+/* ---------- Render: To-do (không bắt buộc) ---------- */
+function renderTodoPage(){
+  document.getElementById('todoDate').textContent = fmtHuman(todayDate());
+
+  const list = todosForDate(todayDate());
+  const key = todayKey();
+  const done = list.filter(t=>isTodoDone(key, t.id)).length;
+  const total = list.length;
+  const pct = total ? Math.round(done/total*100) : 0;
+  document.getElementById('todoProgressFill').style.width = pct + '%';
+  document.getElementById('todoProgressLabel').textContent = `${done}/${total} việc đã làm`;
+  document.getElementById('todoProgressPct').textContent = pct + '%';
+
+  const listEl = document.getElementById('todoList');
+  if(list.length === 0){
+    listEl.innerHTML = `<div class="empty-state"><span class="big">📝</span>Hôm nay chưa có việc to-do nào.<br>Vào Cài đặt để thêm nhé!</div>`;
+  } else {
+    listEl.innerHTML = '';
+    list.forEach(t=>{
+      const d = isTodoDone(key, t.id);
+      const row = document.createElement('div');
+      row.className = 'task todo-item' + (d ? ' done' : '');
+      row.innerHTML = `
+        <div class="emoji">${t.emoji}</div>
+        <div class="title ${d?'strike':''}">${escapeHtml(t.title)}</div>
+        <div class="checkbox todo-checkbox ${d?'checked':''}">${d?'✓':''}</div>
+      `;
+      row.addEventListener('click', ()=> toggleTodo(t.id));
+      listEl.appendChild(row);
+    });
+  }
+
+  renderTodoBadges(activeProfile(), calcTodoStreak());
+  renderTodoMonthCalendar();
+  updateTabBadges();
+}
+
+function renderTodoMonthCalendar(){
+  const today = todayDate();
+  const year = today.getFullYear();
+  const month = today.getMonth(); // 0-11
+  const todayKey_ = todayKey();
+
+  document.getElementById('todoCalTitle').textContent = `🗓️ Lịch theo dõi tháng ${month + 1}/${year}`;
+
+  const headEl = document.getElementById('todoCalHead');
+  headEl.innerHTML = ['T2','T3','T4','T5','T6','T7','CN'].map(l=>`<div>${l}</div>`).join('');
+
+  const firstOfMonth = new Date(year, month, 1);
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const wdFirst = weekdayOf(firstOfMonth); // 0=CN..6=T7
+  const leadingBlanks = (wdFirst + 6) % 7; // convert to Monday-start offset
+
+  const cells = [];
+  for(let i=0; i<leadingBlanks; i++) cells.push(null);
+  for(let day=1; day<=daysInMonth; day++) cells.push(new Date(year, month, day));
+
+  const gridEl = document.getElementById('todoCalGrid');
+  gridEl.innerHTML = cells.map(d=>{
+    if(!d) return `<div class="month-cal-cell empty"></div>`;
+    const key = toKey(d);
+    const isFuture = d > today && key !== todayKey_;
+    const isToday = key === todayKey_;
+    const list = todosForDate(d);
+    const done = !isFuture && list.length > 0 && list.every(t=>isTodoDone(key, t.id));
+    let cls = 'month-cal-cell' + (isToday ? ' today' : '') + (done ? ' done' : '');
+    return `<div class="${cls}" data-key="${key}" title="${pad(d.getDate())}/${pad(month+1)}">${done ? '✅' : d.getDate()}</div>`;
+  }).join('');
+  gridEl.querySelectorAll('[data-key]').forEach(cell=>{
+    cell.addEventListener('click', ()=> openTodoDayDetail(cell.dataset.key));
+  });
+}
+
+function dateFromKey(key){
+  const [y, m, d] = key.split('-').map(Number);
+  return new Date(y, m - 1, d);
+}
+function openTodoDayDetail(key){
+  const d = dateFromKey(key);
+  const list = todosForDate(d);
+  document.getElementById('todoDayDetailTitle').textContent = `📝 ${fmtHuman(d)}`;
+  const listEl = document.getElementById('todoDayDetailList');
+  if(list.length === 0){
+    listEl.innerHTML = `<div class="empty-state" style="padding:12px 0">Ngày này không có to-do nào.</div>`;
+  } else {
+    listEl.innerHTML = list.map(t=>{
+      const done = isTodoDone(key, t.id);
+      return `<div class="task todo-item ${done?'done':''}" style="cursor:default">
+        <div class="emoji">${t.emoji}</div>
+        <div class="title ${done?'strike':''}">${escapeHtml(t.title)}</div>
+        <div class="checkbox todo-checkbox ${done?'checked':''}">${done?'✓':''}</div>
+      </div>`;
+    }).join('');
+  }
+  document.getElementById('todoDayDetailModal').classList.add('open');
 }
 
 /* ---------- Render: Stats ---------- */
@@ -430,6 +686,19 @@ function renderSettings(){
       <button class="icon-btn danger" onclick="deleteTask('${t.id}')">🗑️</button>
     </div>
   `).join('') || `<div class="empty-state">Chưa có việc nào.</div>`;
+
+  const todoListEl = document.getElementById('settingsTodoList');
+  todoListEl.innerHTML = p.todos.map(t=>`
+    <div class="list-item">
+      <div class="emoji">${t.emoji}</div>
+      <div class="info">
+        <div class="t">${escapeHtml(t.title)}</div>
+        <div class="s">${t.days.length===7 ? 'Hàng ngày' : t.days.map(d=>DAY_NAMES[d]).join(', ')}</div>
+      </div>
+      <button class="icon-btn" onclick="openTodoModal('${t.id}')">✏️</button>
+      <button class="icon-btn danger" onclick="deleteTodoItem('${t.id}')">🗑️</button>
+    </div>
+  `).join('') || `<div class="empty-state">Chưa có việc to-do nào.</div>`;
 
   const rewardListEl = document.getElementById('settingsRewardList');
   rewardListEl.innerHTML = [...p.rewards].sort((a,b)=>a.threshold-b.threshold).map(r=>`
@@ -700,13 +969,142 @@ function redeemReward(rewardId){
   const r = p.rewards.find(x=>x.id===rewardId);
   if(!r) return;
   if(p.stars < r.threshold){ alert('Bé chưa đủ sao để đổi phần thưởng này!'); return; }
-  if(!confirm(`Xác nhận đổi ${r.threshold} sao lấy "${r.title}"?`)) return;
+  if(!confirm(`Xác nhận đổi ${r.threshold} sao lấy phiếu "${r.title}"?`)) return;
   p.stars -= r.threshold;
   addStarHistory(p, { type:'redeem', dateKey: todayKey(), amount: -r.threshold, reason: r.title, emoji: r.emoji });
+  p.vouchers = p.vouchers || [];
+  p.vouchers.unshift({ id: uid('v'), title: r.title, emoji: r.emoji, cost: r.threshold, status: 'unused', redeemedAt: Date.now(), usedAt: null });
   saveAppData();
   closeStarManageModal();
   renderAll();
   celebrateRedeem(p, r);
+}
+
+/* ---------- Vouchers (Kho phiếu quà) ---------- */
+function fmtVoucherDate(ts){
+  if(!ts) return '';
+  const d = new Date(ts);
+  return `${pad(d.getDate())}/${pad(d.getMonth()+1)}`;
+}
+
+function markVoucherUsed(voucherId){
+  const p = activeProfile();
+  const v = (p.vouchers || []).find(x=>x.id===voucherId);
+  if(!v || v.status === 'used') return;
+  if(!confirm(`Xác nhận ${p.name} đã dùng phiếu "${v.title}"?`)) return;
+  v.status = 'used';
+  v.usedAt = Date.now();
+  saveAppData();
+  renderAll();
+}
+
+function deleteVoucher(voucherId){
+  const p = activeProfile();
+  const v = (p.vouchers || []).find(x=>x.id===voucherId);
+  if(!v) return;
+  if(!confirm(`Xoá phiếu "${v.title}" đã dùng khỏi danh sách?`)) return;
+  p.vouchers = p.vouchers.filter(x=>x.id!==voucherId);
+  saveAppData();
+  renderAll();
+}
+
+function refundVoucher(voucherId){
+  const p = activeProfile();
+  const v = (p.vouchers || []).find(x=>x.id===voucherId);
+  if(!v || v.status === 'used') return;
+  if(v.cost > 0){
+    if(!confirm(`Xoá phiếu "${v.title}" và hoàn lại ${v.cost} sao?`)) return;
+    p.stars += v.cost;
+    addStarHistory(p, { type:'gift', dateKey: todayKey(), amount: v.cost, reason: `Hoàn sao (huỷ phiếu ${v.title})`, emoji: '↩️' });
+  } else {
+    if(!confirm(`Xoá phiếu "${v.title}" khỏi danh sách?`)) return;
+  }
+  p.vouchers = p.vouchers.filter(x=>x.id!==voucherId);
+  saveAppData();
+  renderAll();
+}
+function requestRefundVoucher(voucherId){
+  const proceed = () => refundVoucher(voucherId);
+  if(!appData.parentPin){ openPinSetupModal(proceed); } else { openPinVerifyModal(proceed); }
+}
+
+/* ---------- Tặng phiếu quà trực tiếp (không tốn sao) ---------- */
+const EMOJI_CHOICES_VOUCHER = ['🎮','📖','🎬','🍦','🍿','🎨','⚽','🎧','🧩','🍕','🚲','🎪'];
+function openGiftVoucherModal(){
+  document.getElementById('giftVoucherTitleInput').value = '';
+  renderEmojiPicker('giftVoucherEmojiPicker', EMOJI_CHOICES_VOUCHER, EMOJI_CHOICES_VOUCHER[0], 'giftVoucherEmojiInput');
+  document.getElementById('giftVoucherEmojiInput').value = EMOJI_CHOICES_VOUCHER[0];
+  document.getElementById('giftVoucherModal').classList.add('open');
+}
+function closeGiftVoucherModal(){
+  document.getElementById('giftVoucherModal').classList.remove('open');
+}
+function saveGiftVoucherModal(){
+  const p = activeProfile();
+  const title = document.getElementById('giftVoucherTitleInput').value.trim();
+  if(!title){ alert('Nhập nội dung phiếu quà nhé!'); return; }
+  const emoji = document.getElementById('giftVoucherEmojiInput').value || EMOJI_CHOICES_VOUCHER[0];
+  p.vouchers = p.vouchers || [];
+  p.vouchers.unshift({ id: uid('v'), title, emoji, cost: 0, status: 'unused', redeemedAt: Date.now(), usedAt: null });
+  saveAppData();
+  closeGiftVoucherModal();
+  renderAll();
+  showNotifyModal({ icon: emoji, title: 'Đã tặng phiếu quà!', html: `Phiếu "<b>${escapeHtml(title)}</b>" đã được lưu vào tab 🎫 Phiếu quà của ${p.name}.`, confetti: true });
+}
+
+function renderVouchersPage(){
+  const p = activeProfile();
+  document.getElementById('voucherProfileName').textContent = `Kho phiếu quà tặng của ${p.name} ${p.avatar}`;
+
+  const vouchers = (p.vouchers || []).slice().sort((a,b)=>(b.redeemedAt||0)-(a.redeemedAt||0));
+  const unused = vouchers.filter(v=>v.status!=='used');
+  const used = vouchers.filter(v=>v.status==='used');
+
+  const unusedEl = document.getElementById('voucherUnusedList');
+  if(unused.length === 0){
+    unusedEl.innerHTML = `<div class="empty-state"><span class="big">🎫</span>Chưa có phiếu nào đang chờ dùng.<br>Vào nút ⭐ → Đổi thưởng để tạo phiếu nhé!</div>`;
+  } else {
+    unusedEl.innerHTML = unused.map(v=>`
+      <div class="voucher-card unused">
+        <div class="voucher-emoji">${v.emoji}</div>
+        <div class="voucher-info">
+          <div class="voucher-title">${escapeHtml(v.title)}</div>
+          <div class="voucher-meta">${v.cost > 0 ? `Đổi ${v.cost} ⭐` : '🎁 Quà tặng từ bố mẹ'} · ${fmtVoucherDate(v.redeemedAt)}</div>
+        </div>
+        <div class="voucher-actions">
+          <button type="button" class="voucher-use-btn" data-use-id="${v.id}">🎉 Dùng</button>
+          <button type="button" class="voucher-refund-btn" data-refund-id="${v.id}" title="${v.cost>0 ? 'Hoàn sao, hủy phiếu' : 'Xoá phiếu này'}">${v.cost>0 ? '↩️ Hoàn sao' : '🗑️ Xoá phiếu'}</button>
+        </div>
+      </div>
+    `).join('');
+    unusedEl.querySelectorAll('[data-use-id]').forEach(btn=>{
+      btn.addEventListener('click', ()=> markVoucherUsed(btn.dataset.useId));
+    });
+    unusedEl.querySelectorAll('[data-refund-id]').forEach(btn=>{
+      btn.addEventListener('click', ()=> requestRefundVoucher(btn.dataset.refundId));
+    });
+  }
+
+  const usedEl = document.getElementById('voucherUsedList');
+  if(used.length === 0){
+    usedEl.innerHTML = `<div class="empty-state" style="padding:12px 0">Chưa có phiếu nào đã dùng.</div>`;
+  } else {
+    usedEl.innerHTML = used.map(v=>`
+      <div class="voucher-card used">
+        <div class="voucher-emoji">${v.emoji}</div>
+        <div class="voucher-info">
+          <div class="voucher-title strike">${escapeHtml(v.title)}</div>
+          <div class="voucher-meta">Đã dùng ${fmtVoucherDate(v.usedAt)}</div>
+        </div>
+        <button type="button" class="icon-btn danger" data-delete-id="${v.id}">🗑️</button>
+      </div>
+    `).join('');
+    usedEl.querySelectorAll('[data-delete-id]').forEach(btn=>{
+      btn.addEventListener('click', ()=> deleteVoucher(btn.dataset.deleteId));
+    });
+  }
+
+  updateTabBadges();
 }
 
 /* ---------- Task modal ---------- */
@@ -724,8 +1122,8 @@ function openTaskModal(id){
 }
 function closeTaskModal(){ document.getElementById('taskModal').classList.remove('open'); }
 
-function renderDaysPicker(selectedDays){
-  const el = document.getElementById('daysRow');
+function renderDaysPicker(selectedDays, containerId){
+  const el = document.getElementById(containerId || 'daysRow');
   el.innerHTML = DAY_NAMES.map((name,i)=>`<button type="button" class="day-chip ${selectedDays.includes(i)?'on':''}" data-day="${i}">${name}</button>`).join('');
   el.querySelectorAll('.day-chip').forEach(chip=>{
     chip.addEventListener('click', ()=> chip.classList.toggle('on'));
@@ -760,6 +1158,45 @@ function saveTaskModal(){
   saveAppData();
   closeTaskModal();
   renderAll();
+}
+
+/* ---------- Todo modal (không bắt buộc) ---------- */
+let editingTodoId = null;
+function openTodoModal(id){
+  editingTodoId = id || null;
+  const p = activeProfile();
+  const t = id ? p.todos.find(x=>x.id===id) : { title:'', emoji:EMOJI_CHOICES_TASK[0], days:[0,1,2,3,4,5,6] };
+  document.getElementById('todoModalTitle').textContent = id ? 'Sửa việc to-do' : 'Thêm việc to-do mới';
+  document.getElementById('todoTitleInput').value = t.title;
+  renderEmojiPicker('todoEmojiPicker', EMOJI_CHOICES_TASK, t.emoji, 'todoEmojiInput');
+  document.getElementById('todoEmojiInput').value = t.emoji;
+  renderDaysPicker(t.days, 'todoDaysRow');
+  document.getElementById('todoModal').classList.add('open');
+}
+function closeTodoModal(){ document.getElementById('todoModal').classList.remove('open'); }
+function saveTodoModal(){
+  const title = document.getElementById('todoTitleInput').value.trim();
+  if(!title){ alert('Nhập tên việc to-do nhé!'); return; }
+  const emoji = document.getElementById('todoEmojiInput').value || EMOJI_CHOICES_TASK[0];
+  const days = [...document.querySelectorAll('#todoDaysRow .day-chip.on')].map(c=>parseInt(c.dataset.day,10));
+  if(days.length===0){ alert('Chọn ít nhất 1 ngày trong tuần!'); return; }
+
+  const p = activeProfile();
+  if(editingTodoId){
+    const t = p.todos.find(x=>x.id===editingTodoId);
+    t.title = title; t.emoji = emoji; t.days = days;
+  } else {
+    p.todos.push({ id: uid(), title, emoji, days });
+  }
+  saveAppData();
+  closeTodoModal();
+  renderAll();
+}
+function deleteTodoItem(id){
+  if(!confirm('Xoá việc to-do này?')) return;
+  const p = activeProfile();
+  p.todos = p.todos.filter(t=>t.id!==id);
+  saveAppData(); renderAll();
 }
 
 /* ---------- Reward modal ---------- */
@@ -878,8 +1315,10 @@ function switchTab(name){
   document.querySelectorAll('.tabbar button').forEach(b=>b.classList.toggle('active', b.dataset.tab===name));
   document.getElementById('tabbar').style.display = (name==='picker') ? 'none' : 'flex';
   if(name==='today') renderToday();
+  if(name==='todo') renderTodoPage();
   if(name==='stats') renderStats();
   if(name==='history') renderHistory();
+  if(name==='voucher') renderVouchersPage();
   if(name==='settings') renderSettings();
   if(name==='picker') renderPicker();
 }
@@ -888,8 +1327,10 @@ function switchTab(name){
 function renderAll(){
   renderToday();
   const activePage = document.querySelector('.page.active');
+  if(activePage && activePage.id === 'page-todo') renderTodoPage();
   if(activePage && activePage.id === 'page-stats') renderStats();
   if(activePage && activePage.id === 'page-history') renderHistory();
+  if(activePage && activePage.id === 'page-voucher') renderVouchersPage();
   if(activePage && activePage.id === 'page-settings') renderSettings();
   if(activePage && activePage.id === 'page-picker') renderPicker();
 }
@@ -910,6 +1351,9 @@ document.addEventListener('DOMContentLoaded', ()=>{
   });
 
   document.getElementById('addTaskBtn').addEventListener('click', ()=>openTaskModal(null));
+  document.getElementById('addTodoBtn').addEventListener('click', ()=>openTodoModal(null));
+  document.getElementById('todoCancelBtn').addEventListener('click', closeTodoModal);
+  document.getElementById('todoSaveBtn').addEventListener('click', saveTodoModal);
   document.getElementById('addRewardBtn').addEventListener('click', ()=>openRewardModal(null));
   document.getElementById('taskCancelBtn').addEventListener('click', closeTaskModal);
   document.getElementById('taskSaveBtn').addEventListener('click', saveTaskModal);
@@ -929,6 +1373,20 @@ document.addEventListener('DOMContentLoaded', ()=>{
       openPinVerifyModal(()=> openStarManageModal('gift'));
     }
   });
+  document.getElementById('giftVoucherBtn').addEventListener('click', ()=>{
+    if(!appData.parentPin){
+      openPinSetupModal(()=> openGiftVoucherModal());
+    } else {
+      openPinVerifyModal(()=> openGiftVoucherModal());
+    }
+  });
+  document.getElementById('giftVoucherCancelBtn').addEventListener('click', closeGiftVoucherModal);
+  document.getElementById('giftVoucherSaveBtn').addEventListener('click', saveGiftVoucherModal);
+
+  document.getElementById('todoDayDetailCloseBtn').addEventListener('click', ()=>{
+    document.getElementById('todoDayDetailModal').classList.remove('open');
+  });
+
   document.getElementById('managePinBtn').addEventListener('click', ()=>{
     if(appData.parentPin){
       openPinVerifyModal(()=> openPinSetupModal(null));

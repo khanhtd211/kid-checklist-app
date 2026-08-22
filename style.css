@@ -100,6 +100,9 @@ button{font-family:inherit;}
   flex-shrink:0;
 }
 .checkbox.checked{background:var(--green);border-color:var(--green);}
+.todo-checkbox.checked{background:#4fa8ff;border-color:#4fa8ff;}
+.todo-fill{background:linear-gradient(90deg,#4fa8ff,#8fd0ff);}
+.todo-hint{background:var(--card);border-radius:var(--radius);padding:12px 16px;margin-bottom:16px;font-size:13px;color:var(--muted);box-shadow:0 2px 10px rgba(0,0,0,.05);}
 .empty-state{text-align:center;color:var(--muted);padding:40px 20px;}
 .empty-state .big{font-size:44px;display:block;margin-bottom:8px;}
 
@@ -128,6 +131,61 @@ button{font-family:inherit;}
 }
 .tabbar button .icon{font-size:22px;}
 .tabbar button.active{color:var(--pink);}
+.icon-wrap{position:relative;display:inline-block;}
+.tab-badge{
+  display:none;position:absolute;top:-6px;right:-12px;
+  font-size:9.5px;font-weight:800;color:#fff;border-radius:999px;
+  padding:1px 5px;min-width:16px;line-height:13px;text-align:center;
+  box-shadow:0 1px 3px rgba(0,0,0,.3);
+}
+.tab-badge.today{background:var(--green);}
+.tab-badge.todo{background:#4fa8ff;}
+.tab-badge.voucher{background:#c9760f;}
+
+/* Voucher cards (Kho phiếu quà) */
+.voucher-card{
+  display:flex;align-items:center;gap:12px;
+  background:var(--card);border-radius:16px;padding:14px;margin-bottom:10px;
+  border:2px dashed var(--yellow);box-shadow:0 2px 10px rgba(0,0,0,.05);
+}
+.voucher-card.used{border-color:#ddd;border-style:solid;opacity:.65;}
+.voucher-emoji{font-size:28px;width:38px;text-align:center;flex-shrink:0;}
+.voucher-info{flex:1;min-width:0;}
+.voucher-title{font-weight:800;font-size:15px;}
+.voucher-title.strike{text-decoration:line-through;color:var(--muted);}
+.voucher-meta{font-size:12px;color:var(--muted);margin-top:2px;}
+.voucher-actions{display:flex;flex-direction:column;gap:6px;align-items:stretch;flex-shrink:0;}
+.voucher-use-btn{background:var(--green);color:#fff;border:none;border-radius:10px;padding:6px 10px;font-weight:800;font-size:12px;white-space:nowrap;}
+.voucher-refund-btn{background:#fff;color:var(--red);border:1.5px solid var(--red);border-radius:10px;padding:5px 10px;font-weight:800;font-size:12px;white-space:nowrap;}
+.modal-hint{font-size:12px;color:var(--muted);margin:-4px 0 14px;line-height:1.4;}
+
+.streak-badge{
+  display:flex;align-items:center;gap:6px;background:linear-gradient(135deg,#ff9a56,#ff6b6b);color:#fff;
+  border-radius:999px;padding:8px 14px;font-weight:800;font-size:14px;white-space:nowrap;flex-shrink:0;
+  box-shadow:0 2px 10px rgba(0,0,0,.08);
+}
+.todo-badge-grid{display:flex;flex-wrap:wrap;gap:10px;}
+.todo-badge-chip{
+  display:flex;flex-direction:column;align-items:center;gap:4px;width:72px;padding:10px 4px;
+  border-radius:14px;background:#f4f4f4;
+}
+.todo-badge-chip.unlocked{background:linear-gradient(135deg,#fff3d6,#ffe6a8);}
+.todo-badge-chip .todo-badge-emoji{font-size:26px;filter:none;}
+.todo-badge-chip.locked .todo-badge-emoji{opacity:.4;}
+.todo-badge-chip .todo-badge-days{font-size:11px;font-weight:700;color:var(--muted);}
+.todo-badge-chip.unlocked .todo-badge-days{color:var(--text);}
+
+.month-cal-head{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:6px;}
+.month-cal-head div{text-align:center;font-size:11px;font-weight:700;color:var(--muted);}
+.month-cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;}
+.month-cal-cell{
+  aspect-ratio:1;display:flex;align-items:center;justify-content:center;
+  border-radius:10px;font-size:12px;font-weight:700;background:#f4f4f4;color:var(--muted);
+}
+.month-cal-cell.empty{background:transparent;}
+.month-cal-cell:not(.empty){cursor:pointer;}
+.month-cal-cell.today{box-shadow:inset 0 0 0 2px var(--pink);color:var(--text);}
+.month-cal-cell.done{background:linear-gradient(135deg,#bdf3d4,#8fe6b6);color:#1a6b46;font-size:14px;}
 
 .page{display:none;}
 .page.active{display:block;animation:fadein .25s ease;}
@@ -238,8 +296,14 @@ button{font-family:inherit;}
   .add-tile{border-color:#3a3945;}
   .history-summary-item{background:#1f1e26;}
   .history-item{border-color:#3a3945;}
+  .voucher-card.used{border-color:#3a3945;}
+  .voucher-refund-btn{background:transparent;}
   .segmented{background:#1f1e26;}
   .seg-btn{color:#9b98a8;}
   .seg-btn.on{background:#2a2932;color:#fff;}
   .redeem-btn.disabled{background:#3a3945;color:#9b98a8;}
+  .todo-badge-chip{background:#1f1e26;}
+  .todo-badge-chip.unlocked{background:linear-gradient(135deg,#4a3a1c,#5c4720);}
+  .month-cal-cell{background:#1f1e26;}
+  .month-cal-cell.done{background:linear-gradient(135deg,#1f4d38,#2c6b4d);color:#8be8b0;}
 }
