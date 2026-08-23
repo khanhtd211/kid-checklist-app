@@ -1641,40 +1641,63 @@ function renderNotifyCard(){
   }
 }
 
-function enableNotificationsFlow(){
-  if(!getSyncCode()){ alert('Cần bật "Đồng bộ nhiều thiết bị" trước khi bật thông báo nhé.'); return; }
-  if(!('Notification' in window) || !('serviceWorker' in navigator)){
-    alert('Máy/trình duyệt này không hỗ trợ thông báo đẩy.');
-    return;
-  }
-  if(!initFirebase() || typeof firebase.messaging !== 'function'){
-    alert('Không tải được thư viện thông báo. Kiểm tra kết nối mạng rồi thử lại nhé.');
-    return;
-  }
-  Notification.requestPermission().then(perm=>{
+function withTimeout(promise, ms, label){
+  return Promise.race([
+    promise,
+    new Promise((_, reject)=> setTimeout(()=> reject(new Error(`Quá thời gian chờ (${label})`)), ms))
+  ]);
+}
+
+async function enableNotificationsFlow(){
+  try{
+    if(!getSyncCode()){ alert('Cần bật "Đồng bộ nhiều thiết bị" trước khi bật thông báo nhé.'); return; }
+    if(!('Notification' in window) || !('serviceWorker' in navigator)){
+      alert('Máy/trình duyệt này không hỗ trợ thông báo đẩy.');
+      return;
+    }
+    if(!initFirebase() || typeof firebase.messaging !== 'function'){
+      alert('Không tải được thư viện thông báo. Kiểm tra kết nối mạng rồi thử lại nhé.');
+      return;
+    }
+
+    const perm = await Notification.requestPermission();
     if(perm !== 'granted'){
       alert('Bạn chưa cho phép gửi thông báo, nên app sẽ không nhắc được nhé. Có thể bật lại trong Cài đặt của máy.');
       renderNotifyCard();
       return;
     }
-    navigator.serviceWorker.ready.then(reg=>{
-      const messaging = firebase.messaging();
-      messaging.getToken({ vapidKey: NOTIFY_VAPID_KEY, serviceWorkerRegistration: reg }).then(token=>{
-        if(!token){ alert('Không lấy được mã thiết bị, thử lại nhé.'); return; }
-        const ref = syncDocRef();
-        if(!ref){ alert('Chưa bật đồng bộ.'); return; }
-        ref.set({ notifyTokens: firebase.firestore.FieldValue.arrayUnion(token) }, { merge: true })
-          .then(()=>{
-            localStorage.setItem(NOTIFY_ENABLED_KEY, '1');
-            renderNotifyCard();
-            alert('Đã bật thông báo nhắc nhở trên máy này! 🔔');
-          })
-          .catch(err=>{ alert('Không lưu được, kiểm tra mạng rồi thử lại. Lỗi: ' + err.message); });
-      }).catch(err=>{
-        alert('Không bật được thông báo. Lỗi: ' + err.message);
-      });
-    });
-  });
+
+    const reg = await withTimeout(navigator.serviceWorker.ready, 8000, 'chờ service worker sẵn sàng');
+
+    let messaging;
+    try{
+      messaging = firebase.messaging();
+    }catch(e){
+      alert('Thiết bị này chưa hỗ trợ thông báo đẩy qua Firebase. Lỗi: ' + (e && e.message ? e.message : e));
+      return;
+    }
+
+    const token = await withTimeout(
+      messaging.getToken({ vapidKey: NOTIFY_VAPID_KEY, serviceWorkerRegistration: reg }),
+      15000, 'lấy mã thiết bị'
+    );
+    if(!token){ alert('Không lấy được mã thiết bị, thử lại nhé.'); return; }
+
+    const ref = syncDocRef();
+    if(!ref){ alert('Chưa bật đồng bộ.'); return; }
+
+    await withTimeout(
+      ref.set({ notifyTokens: firebase.firestore.FieldValue.arrayUnion(token) }, { merge: true }),
+      10000, 'lưu lên máy chủ'
+    );
+
+    localStorage.setItem(NOTIFY_ENABLED_KEY, '1');
+    renderNotifyCard();
+    alert('Đã bật thông báo nhắc nhở trên máy này! 🔔');
+  }catch(err){
+    console.error('Bật thông báo lỗi', err);
+    alert('Không bật được thông báo. Lỗi: ' + (err && (err.code || err.message) ? (err.code || err.message) : err));
+  }
 }
 
 if(getSyncCode() && initFirebase()){
