@@ -1,4 +1,4 @@
-const CACHE_NAME = 'kid-checklist-v41';
+const CACHE_NAME = 'kid-checklist-v43';
 const ASSETS = [
   './',
   './index.html',
@@ -36,8 +36,12 @@ self.addEventListener('fetch', (event) => {
     || url.pathname.endsWith('/style.css');
 
   if (isCoreFile) {
+    // Dùng cache:'no-store' để bỏ qua HTTP cache của trình duyệt/GitHub Pages —
+    // nếu không, dù đã "network-first" vẫn có thể nhận lại bản JS/HTML cũ đã
+    // được trình duyệt lưu tạm, nhất là trên Safari/iOS khi mở app từ Home Screen.
+    const freshRequest = new Request(event.request.url, { cache: 'no-store' });
     event.respondWith(
-      fetch(event.request).then((networkResponse) => {
+      fetch(freshRequest).then((networkResponse) => {
         caches.open(CACHE_NAME).then((cache) => cache.put(event.request, networkResponse.clone()));
         return networkResponse;
       }).catch(() => caches.match(event.request))

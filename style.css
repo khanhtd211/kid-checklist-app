@@ -282,6 +282,12 @@ button{font-family:inherit;}
 .field input[type=date]{
   width:100%;padding:12px 14px;border-radius:12px;border:1.5px solid #e5e5e5;font-size:16px;background:#fafafa;color:var(--text);color-scheme:light;box-sizing:border-box;
 }
+.field input[type=date]{
+  /* Safari/iOS bỏ qua width nếu không có dòng dưới, khiến ô ngày tràn ra ngoài khung */
+  -webkit-min-logical-width:100%;
+  min-width:0;
+  max-width:100%;
+}
 .field select{
   width:100%;padding:12px 14px;border-radius:12px;border:1.5px solid #e5e5e5;font-size:16px;background:#fafafa;
   -webkit-appearance:none;appearance:none;
