@@ -1157,41 +1157,84 @@ function renderVouchersPage(){
   updateTabBadges();
 }
 
+/* ---------- Date picker (lịch dạng lưới thay cho input ngày native) ----------
+   iOS Safari không tự khoá/làm mờ ngày quá khứ trên wheel picker của input
+   type=date (chỉ báo lỗi lúc submit) nên bé vẫn kéo chọn được ngày quá khứ.
+   Tự vẽ lịch dạng lưới (giống lịch theo dõi ở tab To-do) để disable hẳn được
+   từng ô ngày quá khứ, không bấm được luôn — đồng nhất trên mọi thiết bị. */
+let datePickerViewYear, datePickerViewMonth;
+let datePickerMinKey = null;
+let datePickerSelectedKey = null;
+let datePickerOnSelect = null;
+
+function openDatePicker(currentKey, minKey, onSelect){
+  const base = dateFromKey(currentKey || minKey || todayKey());
+  datePickerViewYear = base.getFullYear();
+  datePickerViewMonth = base.getMonth();
+  datePickerMinKey = minKey || null;
+  datePickerSelectedKey = currentKey || null;
+  datePickerOnSelect = onSelect;
+  renderDatePickerGrid();
+  document.getElementById('datePickerModal').classList.add('open');
+}
+function closeDatePicker(){
+  document.getElementById('datePickerModal').classList.remove('open');
+  datePickerOnSelect = null;
+}
+function shiftDatePickerMonth(delta){
+  datePickerViewMonth += delta;
+  if(datePickerViewMonth < 0){ datePickerViewMonth = 11; datePickerViewYear--; }
+  else if(datePickerViewMonth > 11){ datePickerViewMonth = 0; datePickerViewYear++; }
+  renderDatePickerGrid();
+}
+function renderDatePickerGrid(){
+  document.getElementById('datePickerTitle').textContent = `Tháng ${datePickerViewMonth + 1}/${datePickerViewYear}`;
+  document.getElementById('datePickerHead').innerHTML = ['T2','T3','T4','T5','T6','T7','CN'].map(l=>`<div>${l}</div>`).join('');
+
+  const firstOfMonth = new Date(datePickerViewYear, datePickerViewMonth, 1);
+  const daysInMonth = new Date(datePickerViewYear, datePickerViewMonth + 1, 0).getDate();
+  const wdFirst = weekdayOf(firstOfMonth);
+  const leadingBlanks = (wdFirst + 6) % 7; // convert to Monday-start offset
+
+  const cells = [];
+  for(let i=0; i<leadingBlanks; i++) cells.push(null);
+  for(let day=1; day<=daysInMonth; day++) cells.push(new Date(datePickerViewYear, datePickerViewMonth, day));
+
+  const gridEl = document.getElementById('datePickerGrid');
+  gridEl.innerHTML = cells.map(d=>{
+    if(!d) return `<div class="month-cal-cell empty"></div>`;
+    const key = toKey(d);
+    const disabled = !!(datePickerMinKey && key < datePickerMinKey);
+    const isSelected = key === datePickerSelectedKey;
+    const cls = 'month-cal-cell' + (disabled ? ' disabled' : '') + (isSelected ? ' selected' : '');
+    return `<div class="${cls}" data-key="${key}">${d.getDate()}</div>`;
+  }).join('');
+  gridEl.querySelectorAll('.month-cal-cell:not(.empty):not(.disabled)').forEach(cell=>{
+    cell.addEventListener('click', ()=>{
+      const key = cell.dataset.key;
+      const cb = datePickerOnSelect;
+      closeDatePicker();
+      if(cb) cb(key);
+    });
+  });
+}
+
 /* ---------- Task modal ---------- */
 let editingTaskId = null;
 let taskScheduleType = 'repeat'; // 'repeat' | 'once'
-
-// Safari/iOS đôi khi vẫn render input[type=date] rộng hơn khung dù CSS đã set
-// width:100% (kể cả trong flexbox). Ép thêm bằng width tính bằng px cho chắc chắn.
-function fixDateInputWidth(inputId){
-  const input = document.getElementById(inputId);
-  if(!input) return;
-  requestAnimationFrame(() => {
-    const w = input.parentElement.clientWidth;
-    if(w > 0) input.style.width = w + 'px';
-  });
-}
-
-// Safari/iOS: bánh xe chọn ngày (wheel picker) không tự làm mờ/khoá các ngày
-// trước "min" như Chrome/desktop — bé vẫn kéo chọn được ngày quá khứ thoải mái,
-// chỉ báo lỗi khi bấm Lưu. Bắt sự kiện change để tự kéo về hôm nay ngay khi
-// chọn phải ngày quá khứ, chặn ngay tại chỗ thay vì đợi validate lúc Lưu.
-function guardPastDateInput(inputId){
-  const input = document.getElementById(inputId);
-  if(!input) return;
-  input.addEventListener('change', ()=>{
-    if(input.value && input.value < todayKey()){
-      input.value = todayKey();
-    }
-  });
-}
 
 function setTaskScheduleType(type){
   taskScheduleType = type;
   document.querySelectorAll('#taskScheduleTypeTabs .seg-btn').forEach(b=>b.classList.toggle('on', b.dataset.type===type));
   document.getElementById('taskDaysField').style.display = type === 'repeat' ? 'block' : 'none';
   document.getElementById('taskOnceDateField').style.display = type === 'once' ? 'block' : 'none';
-  if(type === 'once') fixDateInputWidth('taskOnceDateInput');
+}
+
+// Gán giá trị cho cặp (input ẩn giữ dateKey, nút hiển thị ngày đã format) dùng
+// chung cho cả modal Việc và To-do "1 lần".
+function setOnceDateValue(inputId, btnId, key){
+  document.getElementById(inputId).value = key;
+  document.getElementById(btnId).textContent = '📅 ' + fmtDateShort(key);
 }
 
 function openTaskModal(id){
@@ -1203,9 +1246,7 @@ function openTaskModal(id){
   renderEmojiPicker('taskEmojiPicker', EMOJI_CHOICES_TASK, t.emoji, 'taskEmojiInput');
   document.getElementById('taskEmojiInput').value = t.emoji;
   renderDaysPicker(t.days && t.days.length ? t.days : [0,1,2,3,4,5,6]);
-  const taskOnceInput = document.getElementById('taskOnceDateInput');
-  taskOnceInput.min = todayKey();
-  taskOnceInput.value = t.onceDate || todayKey();
+  setOnceDateValue('taskOnceDateInput', 'taskOnceDateBtn', t.onceDate || todayKey());
   setTaskScheduleType(t.onceDate ? 'once' : 'repeat');
   document.getElementById('taskModal').classList.add('open');
 }
@@ -1270,7 +1311,6 @@ function setTodoScheduleType(type){
   document.querySelectorAll('#todoScheduleTypeTabs .seg-btn').forEach(b=>b.classList.toggle('on', b.dataset.type===type));
   document.getElementById('todoDaysField').style.display = type === 'repeat' ? 'block' : 'none';
   document.getElementById('todoOnceDateField').style.display = type === 'once' ? 'block' : 'none';
-  if(type === 'once') fixDateInputWidth('todoOnceDateInput');
 }
 
 function openTodoModal(id){
@@ -1282,9 +1322,7 @@ function openTodoModal(id){
   renderEmojiPicker('todoEmojiPicker', EMOJI_CHOICES_TASK, t.emoji, 'todoEmojiInput');
   document.getElementById('todoEmojiInput').value = t.emoji;
   renderDaysPicker(t.days && t.days.length ? t.days : [0,1,2,3,4,5,6], 'todoDaysRow');
-  const todoOnceInput = document.getElementById('todoOnceDateInput');
-  todoOnceInput.min = todayKey();
-  todoOnceInput.value = t.onceDate || todayKey();
+  setOnceDateValue('todoOnceDateInput', 'todoOnceDateBtn', t.onceDate || todayKey());
   setTodoScheduleType(t.onceDate ? 'once' : 'repeat');
   document.getElementById('todoModal').classList.add('open');
 }
@@ -1858,8 +1896,19 @@ document.addEventListener('DOMContentLoaded', ()=>{
     saveAppData();
   });
 
-  guardPastDateInput('taskOnceDateInput');
-  guardPastDateInput('todoOnceDateInput');
+  document.getElementById('datePickerPrevBtn').addEventListener('click', ()=> shiftDatePickerMonth(-1));
+  document.getElementById('datePickerNextBtn').addEventListener('click', ()=> shiftDatePickerMonth(1));
+  document.getElementById('datePickerCancelBtn').addEventListener('click', closeDatePicker);
+  document.getElementById('taskOnceDateBtn').addEventListener('click', ()=>{
+    openDatePicker(document.getElementById('taskOnceDateInput').value, todayKey(), (key)=>{
+      setOnceDateValue('taskOnceDateInput', 'taskOnceDateBtn', key);
+    });
+  });
+  document.getElementById('todoOnceDateBtn').addEventListener('click', ()=>{
+    openDatePicker(document.getElementById('todoOnceDateInput').value, todayKey(), (key)=>{
+      setOnceDateValue('todoOnceDateInput', 'todoOnceDateBtn', key);
+    });
+  });
 
   document.getElementById('addTaskBtn').addEventListener('click', ()=>openTaskModal(null));
   document.getElementById('addTodoBtn').addEventListener('click', ()=>openTodoModal(null));
