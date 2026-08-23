@@ -1,4 +1,4 @@
-const CACHE_NAME = 'kid-checklist-v32';
+const CACHE_NAME = 'kid-checklist-v33';
 const ASSETS = [
   './',
   './index.html',
@@ -26,6 +26,26 @@ self.addEventListener('activate', (event) => {
 
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
+  const url = new URL(event.request.url);
+  // File "lõi" của app (HTML/JS/CSS) hay được cập nhật — ưu tiên lấy bản MỚI NHẤT từ
+  // mạng trước, chỉ dùng bản cache khi không có mạng. Tránh lặp lại tình trạng máy cứ
+  // kẹt mãi ở bản code cũ dù đã push code mới, phải force-quit/xoá cache nhiều lần.
+  const isCoreFile = event.request.mode === 'navigate'
+    || url.pathname.endsWith('/index.html')
+    || url.pathname.endsWith('/app.js')
+    || url.pathname.endsWith('/style.css');
+
+  if (isCoreFile) {
+    event.respondWith(
+      fetch(event.request).then((networkResponse) => {
+        caches.open(CACHE_NAME).then((cache) => cache.put(event.request, networkResponse.clone()));
+        return networkResponse;
+      }).catch(() => caches.match(event.request))
+    );
+    return;
+  }
+
+  // Các file tĩnh ít đổi (icon, manifest...) — vẫn ưu tiên cache cho nhanh/đỡ tốn mạng.
   event.respondWith(
     caches.match(event.request).then((cached) => {
       const fetchPromise = fetch(event.request).then((networkResponse) => {
