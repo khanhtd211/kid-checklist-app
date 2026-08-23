@@ -51,7 +51,7 @@ function weekdayOf(y, mo, d) {
 function getProfileStatuses(appData, dateKey, wd) {
   const profiles = appData.profiles || [];
   return profiles.map(p => {
-    const tasks = (p.tasks || []).filter(t => (t.days || []).includes(wd));
+    const tasks = (p.tasks || []).filter(t => t.onceDate ? t.onceDate === dateKey : (t.days || []).includes(wd));
     const log = (p.logs && p.logs[dateKey]) || {};
     const doneCount = tasks.filter(t => !!log[t.id]).length;
     const missing = tasks.length - doneCount;

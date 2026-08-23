@@ -235,6 +235,13 @@ button{font-family:inherit;}
 }
 .day-chip.on{background:var(--pink);border-color:var(--pink);color:#fff;}
 
+.past-todo-details{margin-top:8px;}
+.past-todo-details summary{cursor:pointer;color:var(--muted);font-size:13px;padding:8px 4px;font-weight:700;list-style:none;}
+.past-todo-details summary::-webkit-details-marker{display:none;}
+.past-todo-details summary::before{content:"▸ ";}
+.past-todo-details[open] summary::before{content:"▾ ";}
+.past-todo-details .list-item{opacity:.65;}
+
 /* History (Lịch sử nhận sao) */
 .history-summary{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
 .history-summary-item{background:#faf9fb;border-radius:14px;padding:12px;text-align:center;font-size:13px;color:var(--muted);}

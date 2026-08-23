@@ -173,7 +173,12 @@ function fmtHuman(d){
 /* ---------- Core logic (scoped to active profile) ---------- */
 function tasksForDate(d){
   const wd = weekdayOf(d);
-  return activeProfile().tasks.filter(t => t.days.includes(wd));
+  const key = toKey(d);
+  return activeProfile().tasks.filter(t => t.onceDate ? t.onceDate === key : t.days.includes(wd));
+}
+function taskScheduleLabel(t){
+  if(t.onceDate) return `📅 ${fmtDateShort(t.onceDate)}`;
+  return t.days.length===7 ? 'Hàng ngày' : t.days.map(d=>DAY_NAMES[d]).join(', ');
 }
 function isDone(dateKey, taskId){
   const p = activeProfile();
@@ -193,9 +198,18 @@ function progressFor(d){
 }
 
 /* ---------- Core logic: To-do (không bắt buộc, không tính sao) ---------- */
+function fmtDateShort(dateKey){
+  const [y,m,d] = dateKey.split('-');
+  return `${d}/${m}/${y}`;
+}
+function todoScheduleLabel(t){
+  if(t.onceDate) return `📅 ${fmtDateShort(t.onceDate)}`;
+  return t.days.length===7 ? 'Hàng ngày' : t.days.map(d=>DAY_NAMES[d]).join(', ');
+}
 function todosForDate(d){
   const wd = weekdayOf(d);
-  return activeProfile().todos.filter(t => t.days.includes(wd));
+  const key = toKey(d);
+  return activeProfile().todos.filter(t => t.onceDate ? t.onceDate === key : (t.days||[]).includes(wd));
 }
 function isTodoDone(dateKey, todoId){
   const p = activeProfile();
@@ -702,30 +716,36 @@ function renderSettings(){
   document.getElementById('childNameInput').value = p.name;
 
   const taskListEl = document.getElementById('settingsTaskList');
-  taskListEl.innerHTML = p.tasks.map(t=>`
+  const taskItemHtml = (t) => `
     <div class="list-item">
       <div class="emoji">${t.emoji}</div>
       <div class="info">
         <div class="t">${escapeHtml(t.title)}</div>
-        <div class="s">${t.days.length===7 ? 'Hàng ngày' : t.days.map(d=>DAY_NAMES[d]).join(', ')}</div>
+        <div class="s">${taskScheduleLabel(t)}</div>
       </div>
       <button class="icon-btn" onclick="openTaskModal('${t.id}')">✏️</button>
       <button class="icon-btn danger" onclick="deleteTask('${t.id}')">🗑️</button>
     </div>
-  `).join('') || `<div class="empty-state">Chưa có việc nào.</div>`;
+  `;
+  const taskTodayK = todayKey();
+  const activeTasks = p.tasks.filter(t => !t.onceDate || t.onceDate >= taskTodayK);
+  taskListEl.innerHTML = activeTasks.map(taskItemHtml).join('') || `<div class="empty-state">Chưa có việc nào.</div>`;
 
   const todoListEl = document.getElementById('settingsTodoList');
-  todoListEl.innerHTML = p.todos.map(t=>`
+  const todoItemHtml = (t) => `
     <div class="list-item">
       <div class="emoji">${t.emoji}</div>
       <div class="info">
         <div class="t">${escapeHtml(t.title)}</div>
-        <div class="s">${t.days.length===7 ? 'Hàng ngày' : t.days.map(d=>DAY_NAMES[d]).join(', ')}</div>
+        <div class="s">${todoScheduleLabel(t)}</div>
       </div>
       <button class="icon-btn" onclick="openTodoModal('${t.id}')">✏️</button>
       <button class="icon-btn danger" onclick="deleteTodoItem('${t.id}')">🗑️</button>
     </div>
-  `).join('') || `<div class="empty-state">Chưa có việc to-do nào.</div>`;
+  `;
+  const todayK = todayKey();
+  const activeTodos = p.todos.filter(t => !t.onceDate || t.onceDate >= todayK);
+  todoListEl.innerHTML = activeTodos.map(todoItemHtml).join('') || `<div class="empty-state">Chưa có việc to-do nào.</div>`;
 
   const rewardListEl = document.getElementById('settingsRewardList');
   rewardListEl.innerHTML = [...p.rewards].sort((a,b)=>a.threshold-b.threshold).map(r=>`
@@ -1139,6 +1159,15 @@ function renderVouchersPage(){
 
 /* ---------- Task modal ---------- */
 let editingTaskId = null;
+let taskScheduleType = 'repeat'; // 'repeat' | 'once'
+
+function setTaskScheduleType(type){
+  taskScheduleType = type;
+  document.querySelectorAll('#taskScheduleTypeTabs .seg-btn').forEach(b=>b.classList.toggle('on', b.dataset.type===type));
+  document.getElementById('taskDaysField').style.display = type === 'repeat' ? 'block' : 'none';
+  document.getElementById('taskOnceDateField').style.display = type === 'once' ? 'block' : 'none';
+}
+
 function openTaskModal(id){
   editingTaskId = id || null;
   const p = activeProfile();
@@ -1147,7 +1176,9 @@ function openTaskModal(id){
   document.getElementById('taskTitleInput').value = t.title;
   renderEmojiPicker('taskEmojiPicker', EMOJI_CHOICES_TASK, t.emoji, 'taskEmojiInput');
   document.getElementById('taskEmojiInput').value = t.emoji;
-  renderDaysPicker(t.days);
+  renderDaysPicker(t.days && t.days.length ? t.days : [0,1,2,3,4,5,6]);
+  document.getElementById('taskOnceDateInput').value = t.onceDate || todayKey();
+  setTaskScheduleType(t.onceDate ? 'once' : 'repeat');
   document.getElementById('taskModal').classList.add('open');
 }
 function closeTaskModal(){ document.getElementById('taskModal').classList.remove('open'); }
@@ -1175,15 +1206,26 @@ function saveTaskModal(){
   const title = document.getElementById('taskTitleInput').value.trim();
   if(!title){ alert('Nhập tên việc cần làm nhé!'); return; }
   const emoji = document.getElementById('taskEmojiInput').value || EMOJI_CHOICES_TASK[0];
-  const days = [...document.querySelectorAll('#daysRow .day-chip.on')].map(c=>parseInt(c.dataset.day,10));
-  if(days.length===0){ alert('Chọn ít nhất 1 ngày trong tuần!'); return; }
+
+  let days = [];
+  let onceDate = null;
+  if(taskScheduleType === 'once'){
+    onceDate = document.getElementById('taskOnceDateInput').value;
+    if(!onceDate){ alert('Chọn ngày cho việc này nhé!'); return; }
+  } else {
+    days = [...document.querySelectorAll('#daysRow .day-chip.on')].map(c=>parseInt(c.dataset.day,10));
+    if(days.length===0){ alert('Chọn ít nhất 1 ngày trong tuần!'); return; }
+  }
 
   const p = activeProfile();
   if(editingTaskId){
     const t = p.tasks.find(x=>x.id===editingTaskId);
     t.title = title; t.emoji = emoji; t.days = days;
+    if(onceDate) t.onceDate = onceDate; else delete t.onceDate;
   } else {
-    p.tasks.push({ id: uid(), title, emoji, days });
+    const newTask = { id: uid(), title, emoji, days };
+    if(onceDate) newTask.onceDate = onceDate;
+    p.tasks.push(newTask);
   }
   saveAppData();
   closeTaskModal();
@@ -1192,6 +1234,15 @@ function saveTaskModal(){
 
 /* ---------- Todo modal (không bắt buộc) ---------- */
 let editingTodoId = null;
+let todoScheduleType = 'repeat'; // 'repeat' | 'once'
+
+function setTodoScheduleType(type){
+  todoScheduleType = type;
+  document.querySelectorAll('#todoScheduleTypeTabs .seg-btn').forEach(b=>b.classList.toggle('on', b.dataset.type===type));
+  document.getElementById('todoDaysField').style.display = type === 'repeat' ? 'block' : 'none';
+  document.getElementById('todoOnceDateField').style.display = type === 'once' ? 'block' : 'none';
+}
+
 function openTodoModal(id){
   editingTodoId = id || null;
   const p = activeProfile();
@@ -1200,7 +1251,9 @@ function openTodoModal(id){
   document.getElementById('todoTitleInput').value = t.title;
   renderEmojiPicker('todoEmojiPicker', EMOJI_CHOICES_TASK, t.emoji, 'todoEmojiInput');
   document.getElementById('todoEmojiInput').value = t.emoji;
-  renderDaysPicker(t.days, 'todoDaysRow');
+  renderDaysPicker(t.days && t.days.length ? t.days : [0,1,2,3,4,5,6], 'todoDaysRow');
+  document.getElementById('todoOnceDateInput').value = t.onceDate || todayKey();
+  setTodoScheduleType(t.onceDate ? 'once' : 'repeat');
   document.getElementById('todoModal').classList.add('open');
 }
 function closeTodoModal(){ document.getElementById('todoModal').classList.remove('open'); }
@@ -1208,15 +1261,26 @@ function saveTodoModal(){
   const title = document.getElementById('todoTitleInput').value.trim();
   if(!title){ alert('Nhập tên việc to-do nhé!'); return; }
   const emoji = document.getElementById('todoEmojiInput').value || EMOJI_CHOICES_TASK[0];
-  const days = [...document.querySelectorAll('#todoDaysRow .day-chip.on')].map(c=>parseInt(c.dataset.day,10));
-  if(days.length===0){ alert('Chọn ít nhất 1 ngày trong tuần!'); return; }
+
+  let days = [];
+  let onceDate = null;
+  if(todoScheduleType === 'once'){
+    onceDate = document.getElementById('todoOnceDateInput').value;
+    if(!onceDate){ alert('Chọn ngày cho việc này nhé!'); return; }
+  } else {
+    days = [...document.querySelectorAll('#todoDaysRow .day-chip.on')].map(c=>parseInt(c.dataset.day,10));
+    if(days.length===0){ alert('Chọn ít nhất 1 ngày trong tuần!'); return; }
+  }
 
   const p = activeProfile();
   if(editingTodoId){
     const t = p.todos.find(x=>x.id===editingTodoId);
     t.title = title; t.emoji = emoji; t.days = days;
+    if(onceDate) t.onceDate = onceDate; else delete t.onceDate;
   } else {
-    p.todos.push({ id: uid(), title, emoji, days });
+    const newTodo = { id: uid(), title, emoji, days };
+    if(onceDate) newTodo.onceDate = onceDate;
+    p.todos.push(newTodo);
   }
   saveAppData();
   closeTodoModal();
@@ -1765,9 +1829,15 @@ document.addEventListener('DOMContentLoaded', ()=>{
   document.getElementById('addTodoBtn').addEventListener('click', ()=>openTodoModal(null));
   document.getElementById('todoCancelBtn').addEventListener('click', closeTodoModal);
   document.getElementById('todoSaveBtn').addEventListener('click', saveTodoModal);
+  document.querySelectorAll('#todoScheduleTypeTabs .seg-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=> setTodoScheduleType(btn.dataset.type));
+  });
   document.getElementById('addRewardBtn').addEventListener('click', ()=>openRewardModal(null));
   document.getElementById('taskCancelBtn').addEventListener('click', closeTaskModal);
   document.getElementById('taskSaveBtn').addEventListener('click', saveTaskModal);
+  document.querySelectorAll('#taskScheduleTypeTabs .seg-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=> setTaskScheduleType(btn.dataset.type));
+  });
   document.getElementById('rewardCancelBtn').addEventListener('click', closeRewardModal);
   document.getElementById('rewardSaveBtn').addEventListener('click', saveRewardModal);
   document.getElementById('profileCancelBtn').addEventListener('click', closeProfileModal);

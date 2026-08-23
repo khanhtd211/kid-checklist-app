@@ -250,8 +250,19 @@
       <input type="hidden" id="taskEmojiInput">
     </div>
     <div class="field">
+      <label>Loại lịch</label>
+      <div class="segmented" id="taskScheduleTypeTabs">
+        <button type="button" class="seg-btn on" data-type="repeat">🔁 Lặp lại</button>
+        <button type="button" class="seg-btn" data-type="once">📅 1 lần</button>
+      </div>
+    </div>
+    <div class="field" id="taskDaysField">
       <label>Áp dụng vào ngày nào</label>
       <div class="days-row" id="daysRow"></div>
+    </div>
+    <div class="field" id="taskOnceDateField" style="display:none">
+      <label>Chọn ngày</label>
+      <input type="date" id="taskOnceDateInput">
     </div>
     <div class="sheet-actions">
       <button class="btn-secondary" id="taskCancelBtn">Huỷ</button>
@@ -274,8 +285,19 @@
       <input type="hidden" id="todoEmojiInput">
     </div>
     <div class="field">
+      <label>Loại lịch</label>
+      <div class="segmented" id="todoScheduleTypeTabs">
+        <button type="button" class="seg-btn on" data-type="repeat">🔁 Lặp lại</button>
+        <button type="button" class="seg-btn" data-type="once">📅 1 lần</button>
+      </div>
+    </div>
+    <div class="field" id="todoDaysField">
       <label>Áp dụng vào ngày nào</label>
       <div class="days-row" id="todoDaysRow"></div>
+    </div>
+    <div class="field" id="todoOnceDateField" style="display:none">
+      <label>Chọn ngày</label>
+      <input type="date" id="todoOnceDateInput">
     </div>
     <div class="sheet-actions">
       <button class="btn-secondary" id="todoCancelBtn">Huỷ</button>
