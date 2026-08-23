@@ -1616,6 +1616,7 @@ function renderSyncSettings(){
    Server gửi thông báo là 1 GitHub Actions chạy theo lịch, xem .github/workflows/send-reminders.yml */
 const NOTIFY_VAPID_KEY = "BGT_c2_UxBqrlKiEd51rPv88WNck8-mE4bTxMFk7Tt46tu2y3A2rETHUtzqSQA84Ct0HDNfH_K_qCr8xwxtjDbQ";
 const NOTIFY_ENABLED_KEY = 'kidChecklistNotifyEnabled_v1';
+const NOTIFY_TOKEN_KEY = 'kidChecklistNotifyToken_v1';
 
 function notifyEnabledLocally(){ return localStorage.getItem(NOTIFY_ENABLED_KEY) === '1'; }
 
@@ -1623,21 +1624,56 @@ function renderNotifyCard(){
   const statusEl = document.getElementById('notifyStatusText');
   const btnEl = document.getElementById('notifyEnableBtn');
   if(!statusEl || !btnEl) return;
+  btnEl.style.width = '100%';
   if(!getSyncCode()){
     statusEl.textContent = '⚪ Cần bật "Đồng bộ nhiều thiết bị" ở trên trước nhé.';
     btnEl.disabled = true;
     btnEl.style.opacity = '0.5';
+    btnEl.className = 'add-btn';
+    btnEl.textContent = '🔔 Bật thông báo trên máy này';
     return;
   }
   btnEl.disabled = false;
   btnEl.style.opacity = '1';
   const perm = ('Notification' in window) ? Notification.permission : 'denied';
+  const enabled = perm === 'granted' && notifyEnabledLocally();
   if(perm === 'denied' && notifyEnabledLocally()){
     statusEl.textContent = '🔴 Thông báo đang bị chặn — vào Cài đặt của máy (mục Thông báo cho app này) để bật lại.';
-  } else if(perm === 'granted' && notifyEnabledLocally()){
+  } else if(enabled){
     statusEl.textContent = '🟢 Đã bật thông báo trên máy này.';
   } else {
     statusEl.textContent = '⚪ Chưa bật thông báo trên máy này.';
+  }
+  btnEl.className = enabled ? 'btn-danger-outline' : 'add-btn';
+  btnEl.textContent = enabled ? '🔕 Tắt thông báo trên máy này' : '🔔 Bật thông báo trên máy này';
+}
+
+function toggleNotificationsFlow(){
+  if(notifyEnabledLocally()) disableNotificationsFlow();
+  else enableNotificationsFlow();
+}
+
+async function disableNotificationsFlow(){
+  if(!confirm('Tắt thông báo nhắc nhở trên máy này?')) return;
+  try{
+    const token = localStorage.getItem(NOTIFY_TOKEN_KEY);
+    const ref = syncDocRef();
+    if(ref && token && typeof firebase !== 'undefined' && firebase.firestore){
+      await ref.set({ notifyTokens: firebase.firestore.FieldValue.arrayRemove(token) }, { merge: true }).catch(()=>{});
+    }
+    // Cố huỷ đăng ký ở tầng trình duyệt luôn — không bắt buộc phải thành công.
+    try{
+      if(initFirebase() && typeof firebase.messaging === 'function'){
+        await firebase.messaging().deleteToken().catch(()=>{});
+      }
+    }catch(e){ /* bỏ qua */ }
+    localStorage.removeItem(NOTIFY_ENABLED_KEY);
+    localStorage.removeItem(NOTIFY_TOKEN_KEY);
+    renderNotifyCard();
+    alert('Đã tắt thông báo trên máy này.');
+  }catch(err){
+    console.error('Tắt thông báo lỗi', err);
+    alert('Không tắt được, kiểm tra mạng rồi thử lại. Lỗi: ' + (err && err.message ? err.message : err));
   }
 }
 
@@ -1692,6 +1728,7 @@ async function enableNotificationsFlow(){
     );
 
     localStorage.setItem(NOTIFY_ENABLED_KEY, '1');
+    localStorage.setItem(NOTIFY_TOKEN_KEY, token);
     renderNotifyCard();
     alert('Đã bật thông báo nhắc nhở trên máy này! 🔔');
   }catch(err){
@@ -1715,7 +1752,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
   document.getElementById('backFromPicker').addEventListener('click', ()=> switchTab('today'));
   document.getElementById('openDataManageBtn').addEventListener('click', ()=> switchTab('datamanage'));
   document.getElementById('backFromDataManage').addEventListener('click', ()=> switchTab('settings'));
-  document.getElementById('notifyEnableBtn').addEventListener('click', enableNotificationsFlow);
+  document.getElementById('notifyEnableBtn').addEventListener('click', toggleNotificationsFlow);
 
   document.getElementById('childNameInput').addEventListener('change', (e)=>{
     activeProfile().name = e.target.value.trim() || 'Bé';
