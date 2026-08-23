@@ -283,10 +283,19 @@ button{font-family:inherit;}
   width:100%;padding:12px 14px;border-radius:12px;border:1.5px solid #e5e5e5;font-size:16px;background:#fafafa;color:var(--text);color-scheme:light;box-sizing:border-box;
 }
 .field input[type=date]{
-  /* Safari/iOS bỏ qua width nếu không có dòng dưới, khiến ô ngày tràn ra ngoài khung */
+  /* Safari/iOS đôi khi bỏ qua width:100% với input ngày, các dòng dưới là fallback */
   -webkit-min-logical-width:100%;
-  min-width:0;
   max-width:100%;
+}
+.date-field{
+  /* Bọc input ngày trong flex + min-width:0 để ép đúng chiều rộng khung trên
+     Safari/iOS — cách này đáng tin cậy hơn width:100% một mình với input[type=date]. */
+  display:flex;
+}
+.date-field input[type=date]{
+  flex:1 1 0%;
+  min-width:0;
+  width:100%;
 }
 .field select{
   width:100%;padding:12px 14px;border-radius:12px;border:1.5px solid #e5e5e5;font-size:16px;background:#fafafa;

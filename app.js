@@ -1161,11 +1161,23 @@ function renderVouchersPage(){
 let editingTaskId = null;
 let taskScheduleType = 'repeat'; // 'repeat' | 'once'
 
+// Safari/iOS đôi khi vẫn render input[type=date] rộng hơn khung dù CSS đã set
+// width:100% (kể cả trong flexbox). Ép thêm bằng width tính bằng px cho chắc chắn.
+function fixDateInputWidth(inputId){
+  const input = document.getElementById(inputId);
+  if(!input) return;
+  requestAnimationFrame(() => {
+    const w = input.parentElement.clientWidth;
+    if(w > 0) input.style.width = w + 'px';
+  });
+}
+
 function setTaskScheduleType(type){
   taskScheduleType = type;
   document.querySelectorAll('#taskScheduleTypeTabs .seg-btn').forEach(b=>b.classList.toggle('on', b.dataset.type===type));
   document.getElementById('taskDaysField').style.display = type === 'repeat' ? 'block' : 'none';
   document.getElementById('taskOnceDateField').style.display = type === 'once' ? 'block' : 'none';
+  if(type === 'once') fixDateInputWidth('taskOnceDateInput');
 }
 
 function openTaskModal(id){
@@ -1244,6 +1256,7 @@ function setTodoScheduleType(type){
   document.querySelectorAll('#todoScheduleTypeTabs .seg-btn').forEach(b=>b.classList.toggle('on', b.dataset.type===type));
   document.getElementById('todoDaysField').style.display = type === 'repeat' ? 'block' : 'none';
   document.getElementById('todoOnceDateField').style.display = type === 'once' ? 'block' : 'none';
+  if(type === 'once') fixDateInputWidth('todoOnceDateInput');
 }
 
 function openTodoModal(id){
