@@ -33,8 +33,10 @@
         <div class="greet" id="greetText">Chào bạn nhỏ! 👋</div>
         <div class="date" id="todayDate"></div>
       </div>
-      <div class="stars-badge" id="starsBadge">⭐ 0</div>
-      <button class="star-manage-btn" id="starManageBtn" title="Quản lý sao: Tặng / Thu hồi / Đổi thưởng">⭐</button>
+      <div class="stars-badge" id="starsBadge" title="Bấm để đổi phần thưởng">⭐ 0</div>
+      <button class="star-manage-btn" id="starManageBtn" title="Quản lý sao (Ba/Mẹ): Tặng / Thu hồi">
+        <span class="psi-base">👪</span><span class="psi-star">⭐</span>
+      </button>
     </div>
 
     <div class="progress-wrap">
@@ -407,7 +409,6 @@
     <div class="segmented" id="starManageTabs">
       <button type="button" class="seg-btn on" data-mode="gift">🎁 Tặng sao</button>
       <button type="button" class="seg-btn" data-mode="deduct">⚠️ Thu hồi</button>
-      <button type="button" class="seg-btn" data-mode="redeem">🏆 Đổi thưởng</button>
     </div>
 
     <div id="starManageReasonSection">
@@ -430,13 +431,21 @@
       </div>
     </div>
 
-    <div id="starRedeemSection" style="display:none">
-      <div id="redeemRewardList"></div>
-    </div>
-
     <div class="sheet-actions">
       <button class="btn-secondary" id="starManageCancelBtn">Huỷ</button>
       <button class="btn-primary" id="starManageSaveBtn">🎉 Tặng sao</button>
+    </div>
+  </div>
+</div>
+
+<!-- Child redeem modal: bé tự đổi sao lấy phiếu quà, không cần mã PIN -->
+<div class="overlay" id="childRedeemModal">
+  <div class="sheet">
+    <h3>🏆 Đổi phần thưởng</h3>
+    <p class="modal-hint" style="margin-top:0">Bé đang có <b id="childRedeemStars">0 ⭐</b>. Chọn phần thưởng muốn đổi nhé!</p>
+    <div id="childRedeemList"></div>
+    <div class="sheet-actions">
+      <button class="btn-primary" id="childRedeemCloseBtn" style="flex:1">Đóng</button>
     </div>
   </div>
 </div>

@@ -859,8 +859,8 @@ function submitPinVerify(){
   if(cb) cb();
 }
 
-/* ---------- Star Manage (Tặng sao / Thu hồi sao / Đổi thưởng) ---------- */
-let starManageMode = 'gift'; // 'gift' | 'deduct' | 'redeem'
+/* ---------- Star Manage (Ba/Mẹ): Tặng sao / Thu hồi sao ---------- */
+let starManageMode = 'gift'; // 'gift' | 'deduct'
 let starReasonList = GIFT_REASONS;
 let starReasonIdx = 0;
 
@@ -882,69 +882,32 @@ function currentStarManageProfile(){
   return getProfile(document.getElementById('starManageProfileSelect').value) || activeProfile();
 }
 
-function renderRedeemList(){
-  const p = currentStarManageProfile();
-  const el = document.getElementById('redeemRewardList');
-  const sorted = [...p.rewards].sort((a,b)=>a.threshold-b.threshold);
-  if(sorted.length === 0){
-    el.innerHTML = `<div class="empty-state">Chưa có mốc thưởng nào. Vào Cài đặt để thêm nhé!</div>`;
-    return;
-  }
-  el.innerHTML = sorted.map(r=>{
-    const eligible = p.stars >= r.threshold;
-    const need = Math.max(0, r.threshold - p.stars);
-    return `
-      <div class="list-item">
-        <div class="emoji">${r.emoji}</div>
-        <div class="info">
-          <div class="t">${escapeHtml(r.title)}</div>
-          <div class="s">${r.threshold} ⭐${eligible ? '' : ` · cần thêm ${need} sao`}</div>
-        </div>
-        <button type="button" class="redeem-btn ${eligible?'':'disabled'}" data-reward-id="${r.id}" ${eligible?'':'disabled'}>Đổi</button>
-      </div>
-    `;
-  }).join('');
-  el.querySelectorAll('.redeem-btn:not(.disabled)').forEach(btn=>{
-    btn.addEventListener('click', ()=> redeemReward(btn.dataset.rewardId));
-  });
-}
-
 function setStarManageMode(mode){
   starManageMode = mode;
   document.querySelectorAll('#starManageTabs .seg-btn').forEach(b=>b.classList.toggle('on', b.dataset.mode===mode));
-  const isRedeem = mode === 'redeem';
-  document.getElementById('starManageReasonSection').style.display = isRedeem ? 'none' : 'block';
-  document.getElementById('starRedeemSection').style.display = isRedeem ? 'block' : 'none';
-  document.getElementById('starManageSaveBtn').style.display = isRedeem ? 'none' : 'block';
-  document.getElementById('starManageCancelBtn').textContent = isRedeem ? 'Đóng' : 'Huỷ';
 
   const titleEl = document.getElementById('starManageTitle');
   const amtLabel = document.getElementById('starAmountLabel');
   const saveBtn = document.getElementById('starManageSaveBtn');
 
-  if(mode === 'gift'){
-    titleEl.textContent = '🎁 Tặng sao cho con';
-    amtLabel.textContent = 'Số sao tặng';
-    saveBtn.textContent = '🎉 Tặng sao';
-    starReasonList = GIFT_REASONS;
-  } else if(mode === 'deduct'){
+  if(mode === 'deduct'){
     titleEl.textContent = '⚠️ Thu hồi sao';
     amtLabel.textContent = 'Số sao thu hồi';
     saveBtn.textContent = '⚠️ Thu hồi';
     starReasonList = DEDUCT_REASONS;
   } else {
-    titleEl.textContent = '🏆 Đổi phần thưởng';
-    renderRedeemList();
+    titleEl.textContent = '🎁 Tặng sao cho con';
+    amtLabel.textContent = 'Số sao tặng';
+    saveBtn.textContent = '🎉 Tặng sao';
+    starReasonList = GIFT_REASONS;
   }
 
-  if(mode !== 'redeem'){
-    starReasonIdx = 0;
-    renderStarReasonPicker();
-    document.getElementById('starCustomReasonWrap').style.display = 'none';
-    document.getElementById('starCustomReasonInput').value = '';
-    document.getElementById('starAmountInput').value = 1;
-    document.querySelectorAll('#starAmountQuick .day-chip').forEach(c=>c.classList.toggle('on', c.dataset.amt==='1'));
-  }
+  starReasonIdx = 0;
+  renderStarReasonPicker();
+  document.getElementById('starCustomReasonWrap').style.display = 'none';
+  document.getElementById('starCustomReasonInput').value = '';
+  document.getElementById('starAmountInput').value = 1;
+  document.querySelectorAll('#starAmountQuick .day-chip').forEach(c=>c.classList.toggle('on', c.dataset.amt==='1'));
 }
 
 function openStarManageModal(mode){
@@ -993,7 +956,7 @@ function submitStarManage(){
 }
 
 function redeemReward(rewardId){
-  const p = currentStarManageProfile();
+  const p = activeProfile();
   const r = p.rewards.find(x=>x.id===rewardId);
   if(!r) return;
   if(p.stars < r.threshold){ alert('Bé chưa đủ sao để đổi phần thưởng này!'); return; }
@@ -1003,9 +966,48 @@ function redeemReward(rewardId){
   p.vouchers = p.vouchers || [];
   p.vouchers.unshift({ id: uid('v'), title: r.title, emoji: r.emoji, cost: r.threshold, status: 'unused', redeemedAt: Date.now(), usedAt: null });
   saveAppData();
-  closeStarManageModal();
+  renderChildRedeemList();
   renderAll();
   celebrateRedeem(p, r);
+}
+
+/* ---------- Đổi thưởng do BÉ tự bấm (không cần mã PIN) ---------- */
+function renderChildRedeemList(){
+  const p = activeProfile();
+  const starsEl = document.getElementById('childRedeemStars');
+  if(starsEl) starsEl.textContent = `${p.stars} ⭐`;
+  const el = document.getElementById('childRedeemList');
+  if(!el) return;
+  const sorted = [...(p.rewards || [])].sort((a,b)=>a.threshold-b.threshold);
+  if(sorted.length === 0){
+    el.innerHTML = `<div class="empty-state">Chưa có mốc thưởng nào. Nhờ Ba Mẹ vào Cài đặt thêm nhé!</div>`;
+    return;
+  }
+  el.innerHTML = sorted.map(r=>{
+    const eligible = p.stars >= r.threshold;
+    const need = Math.max(0, r.threshold - p.stars);
+    return `
+      <div class="list-item">
+        <div class="emoji">${r.emoji}</div>
+        <div class="info">
+          <div class="t">${escapeHtml(r.title)}</div>
+          <div class="s">${r.threshold} ⭐${eligible ? '' : ` · cần thêm ${need} sao`}</div>
+        </div>
+        <button type="button" class="redeem-btn ${eligible?'':'disabled'}" data-reward-id="${r.id}" ${eligible?'':'disabled'}>Đổi</button>
+      </div>
+    `;
+  }).join('');
+  el.querySelectorAll('.redeem-btn:not(.disabled)').forEach(btn=>{
+    btn.addEventListener('click', ()=> redeemReward(btn.dataset.rewardId));
+  });
+}
+
+function openChildRedeemModal(){
+  renderChildRedeemList();
+  document.getElementById('childRedeemModal').classList.add('open');
+}
+function closeChildRedeemModal(){
+  document.getElementById('childRedeemModal').classList.remove('open');
 }
 
 /* ---------- Vouchers (Kho phiếu quà) ---------- */
@@ -1782,6 +1784,8 @@ document.addEventListener('DOMContentLoaded', ()=>{
       openPinVerifyModal(()=> openStarManageModal('gift'));
     }
   });
+  document.getElementById('starsBadge').addEventListener('click', openChildRedeemModal);
+  document.getElementById('childRedeemCloseBtn').addEventListener('click', closeChildRedeemModal);
   document.getElementById('giftVoucherBtn').addEventListener('click', ()=>{
     if(!appData.parentPin){
       openPinSetupModal(()=> openGiftVoucherModal());
@@ -1830,9 +1834,6 @@ document.addEventListener('DOMContentLoaded', ()=>{
 
   document.getElementById('starManageCancelBtn').addEventListener('click', closeStarManageModal);
   document.getElementById('starManageSaveBtn').addEventListener('click', submitStarManage);
-  document.getElementById('starManageProfileSelect').addEventListener('change', ()=>{
-    if(starManageMode === 'redeem') renderRedeemList();
-  });
   document.querySelectorAll('#starManageTabs .seg-btn').forEach(btn=>{
     btn.addEventListener('click', ()=> setStarManageMode(btn.dataset.mode));
   });
