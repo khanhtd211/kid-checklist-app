@@ -1172,6 +1172,20 @@ function fixDateInputWidth(inputId){
   });
 }
 
+// Safari/iOS: bánh xe chọn ngày (wheel picker) không tự làm mờ/khoá các ngày
+// trước "min" như Chrome/desktop — bé vẫn kéo chọn được ngày quá khứ thoải mái,
+// chỉ báo lỗi khi bấm Lưu. Bắt sự kiện change để tự kéo về hôm nay ngay khi
+// chọn phải ngày quá khứ, chặn ngay tại chỗ thay vì đợi validate lúc Lưu.
+function guardPastDateInput(inputId){
+  const input = document.getElementById(inputId);
+  if(!input) return;
+  input.addEventListener('change', ()=>{
+    if(input.value && input.value < todayKey()){
+      input.value = todayKey();
+    }
+  });
+}
+
 function setTaskScheduleType(type){
   taskScheduleType = type;
   document.querySelectorAll('#taskScheduleTypeTabs .seg-btn').forEach(b=>b.classList.toggle('on', b.dataset.type===type));
@@ -1843,6 +1857,9 @@ document.addEventListener('DOMContentLoaded', ()=>{
     activeProfile().name = e.target.value.trim() || 'Bé';
     saveAppData();
   });
+
+  guardPastDateInput('taskOnceDateInput');
+  guardPastDateInput('todoOnceDateInput');
 
   document.getElementById('addTaskBtn').addEventListener('click', ()=>openTaskModal(null));
   document.getElementById('addTodoBtn').addEventListener('click', ()=>openTodoModal(null));
