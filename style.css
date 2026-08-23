@@ -278,8 +278,9 @@ button{font-family:inherit;}
 .field{margin-bottom:14px;}
 .field label{display:block;font-size:13px;color:var(--muted);margin-bottom:6px;font-weight:600;}
 .field input[type=text],
-.field input[type=password]{
-  width:100%;padding:12px 14px;border-radius:12px;border:1.5px solid #e5e5e5;font-size:16px;background:#fafafa;
+.field input[type=password],
+.field input[type=date]{
+  width:100%;padding:12px 14px;border-radius:12px;border:1.5px solid #e5e5e5;font-size:16px;background:#fafafa;color:var(--text);color-scheme:light;box-sizing:border-box;
 }
 .field select{
   width:100%;padding:12px 14px;border-radius:12px;border:1.5px solid #e5e5e5;font-size:16px;background:#fafafa;
@@ -304,7 +305,8 @@ button{font-family:inherit;}
   .task.done{opacity:.4;}
   .field input[type=text],
   .field input[type=password],
-  .field select{background:#1f1e26;border-color:#3a3945;color:#fff;}
+  .field input[type=date],
+  .field select{background:#1f1e26;border-color:#3a3945;color:#fff;color-scheme:dark;}
   .day-chip{background:#1f1e26;border-color:#3a3945;}
   .icon-btn{background:#1f1e26;}
   .btn-secondary{background:#3a3945;color:#fff;}

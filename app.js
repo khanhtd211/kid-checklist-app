@@ -1177,7 +1177,9 @@ function openTaskModal(id){
   renderEmojiPicker('taskEmojiPicker', EMOJI_CHOICES_TASK, t.emoji, 'taskEmojiInput');
   document.getElementById('taskEmojiInput').value = t.emoji;
   renderDaysPicker(t.days && t.days.length ? t.days : [0,1,2,3,4,5,6]);
-  document.getElementById('taskOnceDateInput').value = t.onceDate || todayKey();
+  const taskOnceInput = document.getElementById('taskOnceDateInput');
+  taskOnceInput.min = todayKey();
+  taskOnceInput.value = t.onceDate || todayKey();
   setTaskScheduleType(t.onceDate ? 'once' : 'repeat');
   document.getElementById('taskModal').classList.add('open');
 }
@@ -1212,6 +1214,7 @@ function saveTaskModal(){
   if(taskScheduleType === 'once'){
     onceDate = document.getElementById('taskOnceDateInput').value;
     if(!onceDate){ alert('Chọn ngày cho việc này nhé!'); return; }
+    if(onceDate < todayKey()){ alert('Chỉ chọn được ngày hôm nay hoặc sau này thôi nhé!'); return; }
   } else {
     days = [...document.querySelectorAll('#daysRow .day-chip.on')].map(c=>parseInt(c.dataset.day,10));
     if(days.length===0){ alert('Chọn ít nhất 1 ngày trong tuần!'); return; }
@@ -1252,7 +1255,9 @@ function openTodoModal(id){
   renderEmojiPicker('todoEmojiPicker', EMOJI_CHOICES_TASK, t.emoji, 'todoEmojiInput');
   document.getElementById('todoEmojiInput').value = t.emoji;
   renderDaysPicker(t.days && t.days.length ? t.days : [0,1,2,3,4,5,6], 'todoDaysRow');
-  document.getElementById('todoOnceDateInput').value = t.onceDate || todayKey();
+  const todoOnceInput = document.getElementById('todoOnceDateInput');
+  todoOnceInput.min = todayKey();
+  todoOnceInput.value = t.onceDate || todayKey();
   setTodoScheduleType(t.onceDate ? 'once' : 'repeat');
   document.getElementById('todoModal').classList.add('open');
 }
@@ -1267,6 +1272,7 @@ function saveTodoModal(){
   if(todoScheduleType === 'once'){
     onceDate = document.getElementById('todoOnceDateInput').value;
     if(!onceDate){ alert('Chọn ngày cho việc này nhé!'); return; }
+    if(onceDate < todayKey()){ alert('Chỉ chọn được ngày hôm nay hoặc sau này thôi nhé!'); return; }
   } else {
     days = [...document.querySelectorAll('#todoDaysRow .day-chip.on')].map(c=>parseInt(c.dataset.day,10));
     if(days.length===0){ alert('Chọn ít nhất 1 ngày trong tuần!'); return; }
