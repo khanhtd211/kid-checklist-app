@@ -214,6 +214,13 @@
       <div class="modal-hint" id="syncStatusText" style="margin-top:0">⚪ Chưa bật đồng bộ — dữ liệu chỉ đang lưu trên máy này.</div>
       <div id="syncSetupArea"></div>
     </div>
+
+    <div class="card">
+      <div class="section-title">🔔 Thông báo nhắc nhở</div>
+      <div class="modal-hint" id="notifyStatusText" style="margin-top:0">⚪ Chưa bật thông báo trên máy này.</div>
+      <div style="font-size:13px;color:var(--muted);margin-bottom:10px">App sẽ tự nhắc 1 lần buổi chiều (15h-17h) và 1 lần buổi tối (19h-20h) nếu bé chưa hoàn thành hết checklist hôm nay. Bỏ qua nếu bé đã xong hết rồi. Cần bật Đồng bộ nhiều thiết bị ở trên trước.</div>
+      <button class="add-btn" id="notifyEnableBtn">🔔 Bật thông báo trên máy này</button>
+    </div>
   </div>
 
 </div>
@@ -450,6 +457,7 @@
 
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-messaging-compat.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

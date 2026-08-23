@@ -1349,7 +1349,7 @@ function switchTab(name){
   if(name==='voucher') renderVouchersPage();
   if(name==='settings') renderSettings();
   if(name==='picker') renderPicker();
-  if(name==='datamanage') renderSyncSettings();
+  if(name==='datamanage'){ renderSyncSettings(); renderNotifyCard(); }
 }
 
 /* ---------- Init ---------- */
@@ -1362,7 +1362,7 @@ function renderAll(){
   if(activePage && activePage.id === 'page-voucher') renderVouchersPage();
   if(activePage && activePage.id === 'page-settings') renderSettings();
   if(activePage && activePage.id === 'page-picker') renderPicker();
-  if(activePage && activePage.id === 'page-datamanage') renderSyncSettings();
+  if(activePage && activePage.id === 'page-datamanage'){ renderSyncSettings(); renderNotifyCard(); }
 }
 
 /* ---------- Đồng bộ nhiều thiết bị qua Firebase (tuỳ chọn) ---------- */
@@ -1409,7 +1409,9 @@ function pushToCloud(){
   const ref = syncDocRef();
   if(!ref || syncApplyingRemote) return;
   appData.updatedAt = Date.now();
-  ref.set({ json: JSON.stringify(appData), updatedAt: appData.updatedAt }).catch(err=>{
+  // merge:true — không được ghi đè cả document, vì document còn chứa notifyTokens/notifySchedule
+  // (dữ liệu thông báo) không thuộc về appData và không được phép bị xoá mỗi lần lưu.
+  ref.set({ json: JSON.stringify(appData), updatedAt: appData.updatedAt }, { merge: true }).catch(err=>{
     console.error('Đồng bộ lên mây lỗi', err);
   });
 }
@@ -1609,6 +1611,72 @@ function renderSyncSettings(){
   }
 }
 
+/* ---------- Thông báo nhắc nhở (đẩy qua Firebase Cloud Messaging) ----------
+   Cần bật Đồng bộ nhiều thiết bị trước (dùng chung mã gia đình để biết gửi cho ai).
+   Server gửi thông báo là 1 GitHub Actions chạy theo lịch, xem .github/workflows/send-reminders.yml */
+const NOTIFY_VAPID_KEY = "BGT_c2_UxBqrlKiEd51rPv88WNck8-mE4bTxMFk7Tt46tu2y3A2rETHUtzqSQA84Ct0HDNfH_K_qCr8xwxtjDbQ";
+const NOTIFY_ENABLED_KEY = 'kidChecklistNotifyEnabled_v1';
+
+function notifyEnabledLocally(){ return localStorage.getItem(NOTIFY_ENABLED_KEY) === '1'; }
+
+function renderNotifyCard(){
+  const statusEl = document.getElementById('notifyStatusText');
+  const btnEl = document.getElementById('notifyEnableBtn');
+  if(!statusEl || !btnEl) return;
+  if(!getSyncCode()){
+    statusEl.textContent = '⚪ Cần bật "Đồng bộ nhiều thiết bị" ở trên trước nhé.';
+    btnEl.disabled = true;
+    btnEl.style.opacity = '0.5';
+    return;
+  }
+  btnEl.disabled = false;
+  btnEl.style.opacity = '1';
+  const perm = ('Notification' in window) ? Notification.permission : 'denied';
+  if(perm === 'denied' && notifyEnabledLocally()){
+    statusEl.textContent = '🔴 Thông báo đang bị chặn — vào Cài đặt của máy (mục Thông báo cho app này) để bật lại.';
+  } else if(perm === 'granted' && notifyEnabledLocally()){
+    statusEl.textContent = '🟢 Đã bật thông báo trên máy này.';
+  } else {
+    statusEl.textContent = '⚪ Chưa bật thông báo trên máy này.';
+  }
+}
+
+function enableNotificationsFlow(){
+  if(!getSyncCode()){ alert('Cần bật "Đồng bộ nhiều thiết bị" trước khi bật thông báo nhé.'); return; }
+  if(!('Notification' in window) || !('serviceWorker' in navigator)){
+    alert('Máy/trình duyệt này không hỗ trợ thông báo đẩy.');
+    return;
+  }
+  if(!initFirebase() || typeof firebase.messaging !== 'function'){
+    alert('Không tải được thư viện thông báo. Kiểm tra kết nối mạng rồi thử lại nhé.');
+    return;
+  }
+  Notification.requestPermission().then(perm=>{
+    if(perm !== 'granted'){
+      alert('Bạn chưa cho phép gửi thông báo, nên app sẽ không nhắc được nhé. Có thể bật lại trong Cài đặt của máy.');
+      renderNotifyCard();
+      return;
+    }
+    navigator.serviceWorker.ready.then(reg=>{
+      const messaging = firebase.messaging();
+      messaging.getToken({ vapidKey: NOTIFY_VAPID_KEY, serviceWorkerRegistration: reg }).then(token=>{
+        if(!token){ alert('Không lấy được mã thiết bị, thử lại nhé.'); return; }
+        const ref = syncDocRef();
+        if(!ref){ alert('Chưa bật đồng bộ.'); return; }
+        ref.set({ notifyTokens: firebase.firestore.FieldValue.arrayUnion(token) }, { merge: true })
+          .then(()=>{
+            localStorage.setItem(NOTIFY_ENABLED_KEY, '1');
+            renderNotifyCard();
+            alert('Đã bật thông báo nhắc nhở trên máy này! 🔔');
+          })
+          .catch(err=>{ alert('Không lưu được, kiểm tra mạng rồi thử lại. Lỗi: ' + err.message); });
+      }).catch(err=>{
+        alert('Không bật được thông báo. Lỗi: ' + err.message);
+      });
+    });
+  });
+}
+
 if(getSyncCode() && initFirebase()){
   startSyncListener();
 }
@@ -1624,6 +1692,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
   document.getElementById('backFromPicker').addEventListener('click', ()=> switchTab('today'));
   document.getElementById('openDataManageBtn').addEventListener('click', ()=> switchTab('datamanage'));
   document.getElementById('backFromDataManage').addEventListener('click', ()=> switchTab('settings'));
+  document.getElementById('notifyEnableBtn').addEventListener('click', enableNotificationsFlow);
 
   document.getElementById('childNameInput').addEventListener('change', (e)=>{
     activeProfile().name = e.target.value.trim() || 'Bé';

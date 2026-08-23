@@ -1,0 +1,56 @@
+name: Gửi thông báo nhắc nhở checklist
+
+on:
+  schedule:
+    # Buổi chiều: kiểm tra mỗi 15 phút trong khung 15h-17h giờ VN (08:00-09:45 UTC)
+    - cron: '*/15 8-9 * * *'
+    # Buổi tối: kiểm tra mỗi 15 phút trong khung 19h-20h giờ VN (12:00-12:45 UTC)
+    - cron: '*/15 12 * * *'
+  workflow_dispatch:
+    inputs:
+      window:
+        description: 'Khung giờ để test thủ công'
+        required: true
+        default: 'afternoon'
+        type: choice
+        options:
+          - afternoon
+          - evening
+      force_send:
+        description: 'Bỏ qua kiểm tra giờ/đã gửi hôm nay (chỉ dùng để test — lưu ý sẽ tính là "đã gửi hôm nay" luôn)'
+        required: true
+        default: true
+        type: boolean
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Cài thư viện
+        working-directory: .github/scripts
+        run: npm install
+
+      - name: Xác định khung giờ đang chạy
+        id: pickwindow
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "window=${{ github.event.inputs.window }}" >> "$GITHUB_OUTPUT"
+          elif [ "${{ github.event.schedule }}" = "*/15 8-9 * * *" ]; then
+            echo "window=afternoon" >> "$GITHUB_OUTPUT"
+          else
+            echo "window=evening" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Gửi thông báo
+        working-directory: .github/scripts
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          NOTIFY_WINDOW: ${{ steps.pickwindow.outputs.window }}
+          FORCE_SEND: ${{ github.event.inputs.force_send }}
+        run: node send-reminders.js
