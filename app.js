@@ -55,6 +55,9 @@ function newProfile(name, avatar){
     starHistory: [], // [{ id, type:'complete'|'gift', dateKey, amount, reason, emoji, at }]
     todos: defaultTodos(),  // việc nên làm, không bắt buộc, không tính sao
     todoLogs: {},           // { 'YYYY-MM-DD': { todoId: true } }
+    todoCompleteDays: {},   // { 'YYYY-MM-DD': true|false } -> chốt lại NGAY khi ngày đó có
+                             // tương tác, để sau này sửa/xoá to-do không làm đổi lại kết quả
+                             // của các ngày cũ (tránh tính streak sai hồi tố)
     todoBadges: [],         // [3, 7, 14, ...] mốc chuỗi ngày đã mở khoá, không liên quan sao
     vouchers: [],           // [{ id, title, emoji, cost, status:'unused'|'used', redeemedAt, usedAt }]
   };
@@ -107,6 +110,7 @@ if(typeof appData.parentPin === 'undefined') appData.parentPin = null;
 (appData.profiles || []).forEach(p=>{
   if(!Array.isArray(p.todos)) p.todos = [];
   if(!p.todoLogs || typeof p.todoLogs !== 'object') p.todoLogs = {};
+  if(!p.todoCompleteDays || typeof p.todoCompleteDays !== 'object') p.todoCompleteDays = {};
   if(!Array.isArray(p.todoBadges)) p.todoBadges = [];
   if(!Array.isArray(p.starHistory)){
     const hist = [];
@@ -225,6 +229,7 @@ function toggleTodo(todoId){
   const key = todayKey();
   const wasDone = isTodoDone(key, todoId);
   setTodoDone(key, todoId, !wasDone);
+  lockTodoDayComplete(key); // chốt lại kết quả hôm nay ngay lúc này, xem giải thích ở khai báo hàm
   saveAppData();
   const p = activeProfile();
   const streak = calcTodoStreak();
@@ -241,21 +246,45 @@ const TODO_STREAK_BADGES = [
   { days:60,  emoji:'💎', title:'Bền bỉ 60 ngày' },
   { days:100, emoji:'👑', title:'Huyền thoại 100 ngày' },
 ];
-function calcTodoStreak(){
+
+// Ghi lại (chốt) kết quả "ngày dateKey đã hoàn thành hết to-do chưa" NGAY tại thời
+// điểm có tương tác trong ngày đó — dùng cho ngày hôm nay (ngày duy nhất còn tick
+// được). Một khi ngày đó trôi qua, giá trị ghi lần cuối sẽ tự "đông cứng" vĩnh viễn:
+// không còn tương tác nào ghi đè lên key ngày đó nữa, nên sau này thêm/sửa/xoá to-do
+// sẽ KHÔNG làm đổi lại kết quả của các ngày cũ (né được bug tính streak sai hồi tố).
+function lockTodoDayComplete(dateKey){
   const p = activeProfile();
+  const list = todosForDate(dateFromKey(dateKey));
+  p.todoCompleteDays = p.todoCompleteDays || {};
+  p.todoCompleteDays[dateKey] = list.length > 0 && list.every(t=>isTodoDone(dateKey, t.id));
+}
+
+// Nguồn sự thật cho "ngày đó đã xong hết to-do chưa": ưu tiên bản ghi đã chốt
+// (todoCompleteDays); nếu chưa có (dữ liệu cũ trước khi có tính năng này, hoặc
+// ngày chưa từng tương tác) thì fallback tính theo lịch to-do hiện tại như cũ.
+// Trả về true/false, hoặc null nếu ngày đó không có to-do nào được lên lịch.
+function isTodoDayComplete(dateKey){
+  const p = activeProfile();
+  if(p.todoCompleteDays && typeof p.todoCompleteDays[dateKey] === 'boolean'){
+    return p.todoCompleteDays[dateKey];
+  }
+  const list = todosForDate(dateFromKey(dateKey));
+  if(list.length === 0) return null;
+  return list.every(t=>isTodoDone(dateKey, t.id));
+}
+
+function calcTodoStreak(){
   let d = todayDate();
   const key0 = toKey(d);
-  const list0 = todosForDate(d);
-  const todayComplete = list0.length > 0 && list0.every(t=>isTodoDone(key0, t.id));
+  const todayComplete = isTodoDayComplete(key0) === true;
   if(!todayComplete) d = addDays(d, -1);
 
   let streak = 0;
   for(let i=0; i<1000; i++){
     const key = toKey(d);
-    const list = todosForDate(d);
-    if(list.length === 0){ d = addDays(d, -1); continue; } // ngày đó không có to-do nào — bỏ qua, không phá chuỗi
-    const allDone = list.every(t=>isTodoDone(key, t.id));
-    if(!allDone) break;
+    const status = isTodoDayComplete(key);
+    if(status === null){ d = addDays(d, -1); continue; } // ngày đó không có to-do nào — bỏ qua, không phá chuỗi
+    if(!status) break;
     streak++;
     d = addDays(d, -1);
   }
@@ -555,8 +584,7 @@ function renderTodoMonthCalendar(){
     const key = toKey(d);
     const isFuture = d > today && key !== todayKey_;
     const isToday = key === todayKey_;
-    const list = todosForDate(d);
-    const done = !isFuture && list.length > 0 && list.every(t=>isTodoDone(key, t.id));
+    const done = !isFuture && isTodoDayComplete(key) === true;
     let cls = 'month-cal-cell' + (isToday ? ' today' : '') + (done ? ' done' : '');
     return `<div class="${cls}" data-key="${key}" title="${pad(d.getDate())}/${pad(month+1)}">${done ? '✅' : d.getDate()}</div>`;
   }).join('');

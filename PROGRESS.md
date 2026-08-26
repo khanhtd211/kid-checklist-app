@@ -7,6 +7,21 @@
 
 _(tính đến 26/08/2026)_
 
+- **[26/08/2026]** Fix bug huy hiệu to-do (🌱 3 ngày...) mở khoá SAI/sớm hơn
+  thực tế: `calcTodoStreak()` trước đây tính lại "ngày X đã xong hết to-do
+  chưa" từ danh sách to-do **hiện tại** mỗi lần gọi, nên sửa/xoá 1 to-do sẽ
+  làm các ngày cũ bị tính lại hồi tố sai. Đã thêm `todoCompleteDays` để chốt
+  cứng kết quả từng ngày ngay khi có tương tác (giống cách `starDays` chốt
+  cho checklist chính) — verify bằng test thật trong browser (xem "Quyết định
+  kỹ thuật" bên dưới).
+- **[26/08/2026]** Thêm khung thông báo thứ 3: **sáng thứ 7/CN 10h-11h giờ
+  VN** (`weekend_morning`), bên cạnh chiều/tối đã có — cron riêng chỉ chạy 2
+  ngày cuối tuần (`.github/workflows/send-reminders.yml`), bỏ qua nếu bé đã
+  xong hết trước 10h (giống buổi chiều, tránh khen 3 lần/ngày).
+- **[26/08/2026]** Tối ưu nội dung thông báo đẩy (`send-reminders.js`): bỏ
+  hẳn tiêu đề thông báo, rút gọn câu chữ (bỏ "hôm nay" thừa, bỏ lặp tên bé),
+  và khi nhiều bé cùng chưa xong thì gộp chung 1 dòng nhắc thay vì mỗi bé 1
+  dòng riêng (chỉ nói "làm nốt nhé!" một lần ở cuối).
 - Checklist hàng ngày theo lịch (lặp lại theo thứ trong tuần, hoặc "1 lần" theo
   ngày cụ thể) + hệ thống sao thưởng khi hoàn thành hết việc trong ngày.
 - Mốc thưởng theo số sao → đổi thành phiếu quà, quản lý ở tab riêng (dùng/hoàn
@@ -38,6 +53,22 @@ user)_
 
 ## Quyết định kỹ thuật quan trọng
 
+- **[26/08/2026] Chốt lịch sử hoàn thành to-do (`todoCompleteDays`) thay vì
+  tính lại từ lịch hiện tại.** Lý do: `todosForDate()` luôn đọc danh sách
+  to-do **hiện tại** (`p.todos`) để suy ra "ngày X có những to-do nào" — kể cả
+  cho ngày trong QUÁ KHỨ. Nếu phụ huynh xoá 1 to-do mà bé từng bỏ sót, các
+  ngày cũ bỗng "trông như" đã xong hết theo lịch mới, dù thực tế lúc đó chưa
+  xong → streak nhảy vọt, mở khoá huy hiệu sai. Giải pháp: mỗi lần bé tick
+  to-do hôm nay, chốt luôn kết quả `true/false` của NGÀY ĐÓ vào
+  `todoCompleteDays[dateKey]` — một khi ngày đó trôi qua, giá trị này không
+  còn bị ghi đè nữa (đông cứng vĩnh viễn), nên sửa/xoá to-do sau này không
+  ảnh hưởng ngày cũ. Ngày chưa từng tương tác (dữ liệu cũ trước bản fix này)
+  fallback về cách tính cũ để tương thích ngược.
+- **[26/08/2026] Notification: để `title: ''` thay vì bỏ hẳn field.** Lý do:
+  thử bỏ hẳn key `title` khỏi payload FCM thì `firebase-messaging-compat` ở
+  `sw.js` có thể gọi `showNotification(undefined, ...)`, khiến 1 số trình
+  duyệt hiện chữ **"undefined"** làm tiêu đề — chuỗi rỗng mới thực sự ẩn được
+  tiêu đề mà không lộ lỗi hiển thị.
 - **[26/08/2026] Bỏ hẳn `<input type="date">` native, tự vẽ lịch custom.**
   Lý do: iOS Safari có bug đã biết — wheel picker của input ngày không tự
   làm mờ/khoá ngày trước thuộc tính `min`, chỉ báo lỗi lúc submit form. Vì app
@@ -52,9 +83,14 @@ user)_
 
 ## Việc tồn đọng / Next steps
 
-- **Cần user test thật trên iPhone** phần custom date-picker vừa làm (đã verify
-  bằng browser giả lập, chưa có xác nhận trên thiết bị thật) — đây là việc ưu
-  tiên nhất cho phiên tiếp theo.
+- **Cần user test thật trên iPhone** phần custom date-picker (từ phiên trước) —
+  đã verify bằng browser giả lập, chưa có xác nhận trên thiết bị thật.
+- **Cần theo dõi thực tế khung thông báo mới** (`weekend_morning` 10h-11h thứ
+  7/CN) sau khi deploy — GitHub Actions cron cần đủ 1 chu kỳ (hoặc test thủ
+  công qua `workflow_dispatch` chọn `weekend_morning` + `force_send`) để chắc
+  chắn gửi đúng giờ, đúng ngày, và text rút gọn hiển thị đúng trên điện thoại
+  thật (mới verify bằng cách chạy hàm dựng text trong browser, chưa nhận
+  notification thật).
 - File `_notify_update/send-reminders.js` là bản sao **y hệt**
   `.github/scripts/send-reminders.js` (đã diff, không lệch dòng nào). Chưa rõ
   mục đích (backup thủ công? file cũ quên xoá?) — nên hỏi user và cân nhắc xoá

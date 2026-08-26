@@ -2,6 +2,9 @@ name: Gửi thông báo nhắc nhở checklist
 
 on:
   schedule:
+    # Sáng cuối tuần: kiểm tra mỗi 15 phút trong khung 10h-11h giờ VN, CHỈ thứ 7 (6) &
+    # chủ nhật (0) (03:00-04:45 UTC). VN = UTC+7 nên không lệch ngày.
+    - cron: '*/15 3-4 * * 0,6'
     # Buổi chiều: kiểm tra mỗi 15 phút trong khung 15h-17h giờ VN (08:00-09:45 UTC)
     - cron: '*/15 8-9 * * *'
     # Buổi tối: kiểm tra mỗi 15 phút trong khung 19h-20h giờ VN (12:00-12:45 UTC)
@@ -14,6 +17,7 @@ on:
         default: 'afternoon'
         type: choice
         options:
+          - weekend_morning
           - afternoon
           - evening
       force_send:
@@ -41,6 +45,8 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "window=${{ github.event.inputs.window }}" >> "$GITHUB_OUTPUT"
+          elif [ "${{ github.event.schedule }}" = "*/15 3-4 * * 0,6" ]; then
+            echo "window=weekend_morning" >> "$GITHUB_OUTPUT"
           elif [ "${{ github.event.schedule }}" = "*/15 8-9 * * *" ]; then
             echo "window=afternoon" >> "$GITHUB_OUTPUT"
           else

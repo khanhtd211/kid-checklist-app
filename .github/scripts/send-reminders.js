@@ -6,17 +6,20 @@
 // notifySchedule (giờ ngẫu nhiên đã chọn cho hôm nay + đã gửi chưa).
 const admin = require('firebase-admin');
 
-const WINDOW = process.env.NOTIFY_WINDOW; // 'afternoon' hoặc 'evening'
+const WINDOW = process.env.NOTIFY_WINDOW; // 'weekend_morning' | 'afternoon' | 'evening'
 const FORCE = process.env.FORCE_SEND === 'true'; // chỉ dùng khi test thủ công (workflow_dispatch)
 
-if (WINDOW !== 'afternoon' && WINDOW !== 'evening') {
-  console.error('Thiếu hoặc sai biến NOTIFY_WINDOW (afternoon | evening)');
+if (WINDOW !== 'weekend_morning' && WINDOW !== 'afternoon' && WINDOW !== 'evening') {
+  console.error('Thiếu hoặc sai biến NOTIFY_WINDOW (weekend_morning | afternoon | evening)');
   process.exit(1);
 }
 
 const WINDOWS = {
-  afternoon: { startMin: 15 * 60, endMin: 17 * 60, title: '🌟 Điểm danh buổi chiều' },
-  evening: { startMin: 19 * 60, endMin: 20 * 60, title: '🌙 Điểm danh buổi tối' },
+  // Chỉ thực sự được kích hoạt vào thứ 7/CN — do cron trong send-reminders.yml chỉ chạy
+  // window này 2 ngày đó. Không cần tự kiểm tra thứ ở đây vì đã được lọc từ tầng cron.
+  weekend_morning: { startMin: 10 * 60, endMin: 11 * 60 },
+  afternoon: { startMin: 15 * 60, endMin: 17 * 60 },
+  evening: { startMin: 19 * 60, endMin: 20 * 60 },
 };
 
 const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
@@ -63,22 +66,30 @@ function getProfileStatuses(appData, dateKey, wd) {
 function buildAllDoneBody(statuses) {
   if (statuses.length > 1) {
     const names = statuses.map(s => s.name).join(', ');
-    return `${names} đã xong hết việc hôm nay rồi, giỏi quá! 🎉`;
+    return `${names} đã xong hết việc, giỏi quá! 🎉`;
   }
-  return '🎉 Xong hết việc hôm nay rồi, giỏi quá!';
+  return '🎉 Xong hết việc rồi, giỏi quá!';
 }
 
-// Khi CHƯA phải tất cả đã xong: mỗi bé 1 dòng — xong thì khen, chưa xong thì nhắc kèm tên.
+// Khi CHƯA phải tất cả đã xong: nhóm các bé đã xong thành 1 dòng khen, các bé còn
+// thiếu việc gộp chung 1 dòng nhắc (mỗi bé kèm số việc còn thiếu, chỉ nói "làm nốt
+// nhé!" một lần ở cuối) — tránh lặp câu nhắc nhiều lần khi nhà đông bé.
 function buildMixedBody(statuses) {
-  const multi = statuses.length > 1;
-  return statuses.map(s => {
-    if (s.done) {
-      return multi ? `🎉 ${s.name}: Xong hết việc hôm nay rồi, giỏi quá!` : `🎉 Xong hết việc hôm nay rồi, giỏi quá!`;
-    }
-    return multi
-      ? `⏰ ${s.name}: Còn ${s.missing} việc chưa xong, ${s.name} hãy làm nốt nhé!`
-      : `⏰ Còn ${s.missing} việc chưa xong, ${s.name} hãy làm nốt nhé!`;
-  }).join('\n');
+  if (statuses.length === 1) {
+    const s = statuses[0];
+    return s.done
+      ? '🎉 Xong hết việc rồi, giỏi quá!'
+      : `⏰ Còn ${s.missing} việc chưa xong, làm nốt nhé!`;
+  }
+  const lines = [];
+  const doneNames = statuses.filter(s => s.done).map(s => s.name);
+  const notDone = statuses.filter(s => !s.done);
+  if (doneNames.length) lines.push(`🎉 ${doneNames.join(', ')} xong hết rồi!`);
+  if (notDone.length) {
+    const parts = notDone.map(s => `${s.name} còn ${s.missing} việc`).join(', ');
+    lines.push(`⏰ ${parts}, làm nốt nhé!`);
+  }
+  return lines.join('\n');
 }
 
 async function run() {
@@ -96,11 +107,13 @@ async function run() {
 
     let schedule = data.notifySchedule;
     if (!schedule || schedule.dateKey !== dateKey) {
-      schedule = {
-        dateKey,
-        afternoon: { targetMinute: randInt(WINDOWS.afternoon.startMin, WINDOWS.afternoon.endMin), sent: false },
-        evening: { targetMinute: randInt(WINDOWS.evening.startMin, WINDOWS.evening.endMin), sent: false },
-      };
+      schedule = { dateKey };
+    }
+    // Khởi tạo riêng từng slot nếu thiếu (thay vì tạo cả 3 cùng lúc) — tránh lỗi
+    // "slot undefined" cho gia đình có notifySchedule hôm nay được tạo trước khi
+    // thêm khung mới này, và giúp thêm khung sau này không cần sửa lại đoạn tạo mới.
+    if (!schedule[WINDOW]) {
+      schedule[WINDOW] = { targetMinute: randInt(win.startMin, win.endMin), sent: false };
     }
     const slot = schedule[WINDOW];
 
@@ -119,9 +132,9 @@ async function run() {
     const statuses = getProfileStatuses(appData, dateKey, wd);
     const allDone = statuses.length > 0 && statuses.every(s => s.done);
 
-    // Nếu tất cả bé đã xong hết: chỉ khen 1 lần duy nhất vào buổi TỐI, buổi chiều bỏ qua
-    // (tránh khen 2 lần/ngày khi bé xong việc sớm).
-    if (allDone && WINDOW === 'afternoon') {
+    // Nếu tất cả bé đã xong hết: chỉ khen 1 lần duy nhất vào buổi TỐI, sáng cuối tuần và
+    // buổi chiều bỏ qua (tránh khen 2-3 lần/ngày khi bé xong việc sớm).
+    if (allDone && (WINDOW === 'weekend_morning' || WINDOW === 'afternoon')) {
       skippedAllDone++;
       slot.sent = true;
       await doc.ref.set({ notifySchedule: schedule }, { merge: true });
@@ -134,7 +147,10 @@ async function run() {
     try {
       const resp = await admin.messaging().sendEachForMulticast({
         tokens,
-        notification: { title: win.title, body },
+        // title để chuỗi rỗng thay vì bỏ hẳn key: nếu thiếu hẳn field title, một số trình
+        // duyệt (qua firebase-messaging-compat ở sw.js) gọi showNotification(undefined,...)
+        // và hiển thị chữ "undefined" làm tiêu đề — chuỗi rỗng mới thực sự ẩn được tiêu đề.
+        notification: { title: '', body },
       });
       const badTokens = [];
       resp.responses.forEach((r, i) => {
