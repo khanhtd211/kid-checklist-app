@@ -55,6 +55,12 @@
     <div class="next-reward" id="nextRewardBox"></div>
 
     <div id="taskList"></div>
+
+    <div class="card">
+      <div class="section-title">📚 Bài tập về nhà <span class="hw-summary" id="homeworkSummary"></span></div>
+      <div id="homeworkList"></div>
+      <button class="add-btn" id="addHomeworkBtn" style="background:#8a63d2">+ Thêm bài tập</button>
+    </div>
   </div>
 
   <!-- TODO (không bắt buộc) -->
@@ -220,7 +226,7 @@
     <div class="card">
       <div class="section-title">🔔 Thông báo nhắc nhở</div>
       <div class="modal-hint" id="notifyStatusText" style="margin-top:0">⚪ Chưa bật thông báo trên máy này.</div>
-      <div style="font-size:13px;color:var(--muted);margin-bottom:10px">App sẽ tự nhắc 1 lần buổi chiều (15h-17h) và 1 lần buổi tối (19h-20h) nếu bé chưa hoàn thành hết checklist hôm nay. Bỏ qua nếu bé đã xong hết rồi. Cần bật Đồng bộ nhiều thiết bị ở trên trước.</div>
+      <div style="font-size:13px;color:var(--muted);margin-bottom:10px">App sẽ tự nhắc 1 lần buổi chiều (15h-17h) và 1 lần buổi tối (19h-20h) nếu bé chưa hoàn thành hết checklist hôm nay (bỏ qua nếu bé đã xong hết rồi). Bài tập về nhà chưa làm cũng được nhắc riêng — còn 2 ngày, 1 ngày, hoặc ngay hôm nay là hạn nộp — vào buổi tối các ngày thường, và bất kỳ lúc nào trong ngày vào cuối tuần. Cần bật Đồng bộ nhiều thiết bị ở trên trước.</div>
       <button class="add-btn" id="notifyEnableBtn">🔔 Bật thông báo trên máy này</button>
     </div>
   </div>
@@ -304,6 +310,35 @@
     <div class="sheet-actions">
       <button class="btn-secondary" id="todoCancelBtn">Huỷ</button>
       <button class="btn-primary" id="todoSaveBtn" style="background:#4fa8ff">Lưu</button>
+    </div>
+  </div>
+</div>
+
+<!-- Homework modal (Bài tập về nhà) -->
+<div class="overlay" id="homeworkModal">
+  <div class="sheet">
+    <h3 id="homeworkModalTitle">Thêm bài tập mới</h3>
+    <div class="field">
+      <label>Môn học</label>
+      <div class="subject-picker" id="homeworkSubjectPicker"></div>
+      <input type="hidden" id="homeworkSubjectInput">
+    </div>
+    <div class="field">
+      <label>Nội dung bài tập</label>
+      <input type="text" id="homeworkTitleInput" placeholder="VD: Làm bài trang 25, bài 3">
+    </div>
+    <div class="field">
+      <label>Hạn nộp</label>
+      <button type="button" class="date-select-btn" id="homeworkDueDateBtn"></button>
+      <input type="hidden" id="homeworkDueDateInput">
+    </div>
+    <div class="field">
+      <label>Ghi chú (không bắt buộc)</label>
+      <input type="text" id="homeworkNoteInput" placeholder="VD: Mang theo bút chì màu">
+    </div>
+    <div class="sheet-actions">
+      <button class="btn-secondary" id="homeworkCancelBtn">Huỷ</button>
+      <button class="btn-primary" id="homeworkSaveBtn" style="background:#8a63d2">Lưu</button>
     </div>
   </div>
 </div>

@@ -4,6 +4,18 @@ const LEGACY_KEY = 'kidChecklistData_v1';
 const DAY_NAMES = ['CN','T2','T3','T4','T5','T6','T7'];
 const DAY_NAMES_FULL = ['Chủ nhật','Thứ 2','Thứ 3','Thứ 4','Thứ 5','Thứ 6','Thứ 7'];
 const AVATAR_CHOICES = ['🧒','👦','👧','👶','🐱','🐶','🦁','🐰','🦄','🐻','🐼','🦊','🐸','🐵','🐹','🐨','🐷','🦖','🦕','🐙','🦋','🐢','🤖','🥷'];
+const SUBJECT_CHOICES = [
+  { key:'toan', name:'Toán', emoji:'🧮' },
+  { key:'tviet', name:'Tiếng Việt', emoji:'📖' },
+  { key:'tanh', name:'Tiếng Anh', emoji:'🔤' },
+  { key:'khoahoc', name:'Khoa học', emoji:'🔬' },
+  { key:'daoduc', name:'Đạo đức', emoji:'💛' },
+  { key:'thedu', name:'Thể dục', emoji:'🏃' },
+  { key:'mythuat', name:'Mỹ thuật', emoji:'🎨' },
+  { key:'amnhac', name:'Âm nhạc', emoji:'🎵' },
+  { key:'tinhoc', name:'Tin học', emoji:'💻' },
+  { key:'khac', name:'Khác', emoji:'📚' },
+];
 const GIFT_REASONS = [
   { emoji:'🎓', text:'Đạt điểm cao' },
   { emoji:'🧹', text:'Làm việc nhà' },
@@ -60,6 +72,8 @@ function newProfile(name, avatar){
                              // của các ngày cũ (tránh tính streak sai hồi tố)
     todoBadges: [],         // [3, 7, 14, ...] mốc chuỗi ngày đã mở khoá, không liên quan sao
     vouchers: [],           // [{ id, title, emoji, cost, status:'unused'|'used', redeemedAt, usedAt }]
+    homework: [],           // bài tập về nhà: [{ id, subject, title, dueDate:'YYYY-MM-DD',
+                             // note, status:'pending'|'done', createdAt, doneAt }]
   };
 }
 function defaultAppData(){
@@ -112,6 +126,10 @@ if(typeof appData.parentPin === 'undefined') appData.parentPin = null;
   if(!p.todoLogs || typeof p.todoLogs !== 'object') p.todoLogs = {};
   if(!p.todoCompleteDays || typeof p.todoCompleteDays !== 'object') p.todoCompleteDays = {};
   if(!Array.isArray(p.todoBadges)) p.todoBadges = [];
+  if(!Array.isArray(p.homework)) p.homework = [];
+  // Bài tập về nhà không cần theo dõi nhiều ngày: bài nào hạn nộp đã qua (dù đã
+  // làm hay chưa) tự động bị dọn khỏi danh sách mỗi khi app mở lại vào ngày mới.
+  p.homework = p.homework.filter(h => h.dueDate >= todayKey());
   if(!Array.isArray(p.starHistory)){
     const hist = [];
     Object.keys(p.starDays || {}).forEach(dateKey=>{
@@ -427,6 +445,137 @@ function spawnConfetti(){
   setTimeout(()=>{ wrap.innerHTML=''; }, 3200);
 }
 
+/* ---------- Core logic: Bài tập về nhà ---------- */
+function subjectInfo(key){
+  return SUBJECT_CHOICES.find(s=>s.key===key) || SUBJECT_CHOICES[SUBJECT_CHOICES.length-1];
+}
+function sortedHomework(p){
+  p = p || activeProfile();
+  const list = [...(p.homework || [])];
+  // Chưa làm lên trước (theo hạn nộp gần nhất), đã xong xuống cuối
+  list.sort((a,b)=>{
+    if((a.status==='done') !== (b.status==='done')) return a.status==='done' ? 1 : -1;
+    return (a.dueDate||'').localeCompare(b.dueDate||'');
+  });
+  return list;
+}
+function homeworkDueLabel(dueDate){
+  const key = todayKey();
+  // Bài quá hạn tự động bị dọn khỏi danh sách (xem normalizeAppData), nên ở đây
+  // chỉ còn 2 trường hợp: hạn hôm nay, hoặc hạn 1 ngày sắp tới.
+  if(dueDate === key) return { text:'Hạn nộp: Hôm nay', cls:'today' };
+  if(dueDate === toKey(addDays(todayDate(),1))) return { text:'Hạn nộp: Ngày mai', cls:'soon' };
+  return { text:`Hạn nộp: ${fmtDateShort(dueDate)}`, cls:'' };
+}
+// Dọn các bài đã qua hạn (an toàn thêm cho trường hợp app mở xuyên qua nửa đêm
+// mà không tải lại trang — bình thường normalizeAppData() lúc khởi động đã lo việc này).
+function purgeStaleHomework(p){
+  p = p || activeProfile();
+  const before = (p.homework||[]).length;
+  p.homework = (p.homework||[]).filter(h => h.dueDate >= todayKey());
+  return p.homework.length !== before;
+}
+function toggleHomeworkDone(id){
+  const p = activeProfile();
+  const hw = (p.homework||[]).find(h=>h.id===id);
+  if(!hw) return;
+  hw.status = hw.status==='done' ? 'pending' : 'done';
+  hw.doneAt = hw.status==='done' ? Date.now() : null;
+  saveAppData();
+  renderHomeworkCard();
+}
+function deleteHomeworkItem(id){
+  if(!confirm('Xoá bài tập này?')) return;
+  const p = activeProfile();
+  p.homework = p.homework.filter(h=>h.id!==id);
+  saveAppData();
+  renderHomeworkCard();
+}
+
+function renderHomeworkCard(){
+  const el = document.getElementById('homeworkList');
+  if(!el) return;
+  const p = activeProfile();
+  if(purgeStaleHomework(p)) saveAppData();
+  const list = sortedHomework(p);
+  const pendingCount = list.filter(h=>h.status!=='done').length;
+  const summaryEl = document.getElementById('homeworkSummary');
+  if(summaryEl){
+    if(list.length===0) summaryEl.textContent = '';
+    else if(pendingCount===0) summaryEl.textContent = 'Đã làm xong hết! 🎉';
+    else summaryEl.textContent = `${pendingCount} bài chưa làm`;
+  }
+  if(list.length === 0){
+    el.innerHTML = `<div class="empty-state"><span class="big">📚</span>Chưa có bài tập nào được ghi lại.<br>Bấm "+ Thêm bài tập" để bắt đầu nhé!</div>`;
+    return;
+  }
+  el.innerHTML = list.map(h=>{
+    const s = subjectInfo(h.subject);
+    const done = h.status === 'done';
+    const due = homeworkDueLabel(h.dueDate);
+    return `
+      <div class="homework-item ${done?'done':''}">
+        <div class="checkbox hw-checkbox ${done?'checked':''}" onclick="toggleHomeworkDone('${h.id}')">${done?'✓':''}</div>
+        <div class="emoji">${s.emoji}</div>
+        <div class="info">
+          <div class="t ${done?'strike':''}">${escapeHtml(s.name)} — ${escapeHtml(h.title)}</div>
+          ${h.note ? `<div class="hw-note">${escapeHtml(h.note)}</div>` : ''}
+          <div class="hw-due ${done?'':due.cls}">${done ? '✅ Đã xong' : due.text}</div>
+        </div>
+        <button class="icon-btn" onclick="openHomeworkModal('${h.id}')">✏️</button>
+        <button class="icon-btn danger" onclick="deleteHomeworkItem('${h.id}')">🗑️</button>
+      </div>
+    `;
+  }).join('');
+}
+
+/* ---------- Homework modal ---------- */
+let editingHomeworkId = null;
+function renderSubjectPicker(containerId, selected, hiddenInputId){
+  const el = document.getElementById(containerId);
+  el.innerHTML = SUBJECT_CHOICES.map(s=>`<button type="button" class="subject-chip ${s.key===selected?'sel':''}" data-subject="${s.key}">${s.emoji} ${s.name}</button>`).join('');
+  el.querySelectorAll('button').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      el.querySelectorAll('button').forEach(b=>b.classList.remove('sel'));
+      btn.classList.add('sel');
+      document.getElementById(hiddenInputId).value = btn.dataset.subject;
+    });
+  });
+}
+function openHomeworkModal(id){
+  editingHomeworkId = id || null;
+  const p = activeProfile();
+  const h = id ? p.homework.find(x=>x.id===id) : { subject: SUBJECT_CHOICES[0].key, title:'', dueDate: todayKey(), note:'' };
+  document.getElementById('homeworkModalTitle').textContent = id ? 'Sửa bài tập' : 'Thêm bài tập mới';
+  renderSubjectPicker('homeworkSubjectPicker', h.subject, 'homeworkSubjectInput');
+  document.getElementById('homeworkSubjectInput').value = h.subject;
+  document.getElementById('homeworkTitleInput').value = h.title;
+  document.getElementById('homeworkNoteInput').value = h.note || '';
+  setOnceDateValue('homeworkDueDateInput', 'homeworkDueDateBtn', h.dueDate || todayKey());
+  document.getElementById('homeworkModal').classList.add('open');
+}
+function closeHomeworkModal(){ document.getElementById('homeworkModal').classList.remove('open'); }
+function saveHomeworkModal(){
+  const title = document.getElementById('homeworkTitleInput').value.trim();
+  if(!title){ alert('Nhập nội dung bài tập nhé!'); return; }
+  const subject = document.getElementById('homeworkSubjectInput').value || SUBJECT_CHOICES[0].key;
+  const dueDate = document.getElementById('homeworkDueDateInput').value;
+  if(!dueDate){ alert('Chọn hạn nộp nhé!'); return; }
+  if(dueDate < todayKey()){ alert('Chỉ chọn được ngày hôm nay hoặc sau này thôi nhé!'); return; }
+  const note = document.getElementById('homeworkNoteInput').value.trim();
+
+  const p = activeProfile();
+  if(editingHomeworkId){
+    const h = p.homework.find(x=>x.id===editingHomeworkId);
+    h.subject = subject; h.title = title; h.dueDate = dueDate; h.note = note;
+  } else {
+    p.homework.push({ id: uid('hw'), subject, title, dueDate, note, status:'pending', createdAt: Date.now(), doneAt: null });
+  }
+  saveAppData();
+  closeHomeworkModal();
+  renderHomeworkCard();
+}
+
 /* ---------- Render: Today ---------- */
 function renderToday(){
   const p = activeProfile();
@@ -478,6 +627,7 @@ function renderToday(){
     document.getElementById('doneCard').style.display = 'none';
   }
 
+  renderHomeworkCard();
   updateTabBadges();
 }
 
@@ -1937,9 +2087,17 @@ document.addEventListener('DOMContentLoaded', ()=>{
       setOnceDateValue('todoOnceDateInput', 'todoOnceDateBtn', key);
     });
   });
+  document.getElementById('homeworkDueDateBtn').addEventListener('click', ()=>{
+    openDatePicker(document.getElementById('homeworkDueDateInput').value, todayKey(), (key)=>{
+      setOnceDateValue('homeworkDueDateInput', 'homeworkDueDateBtn', key);
+    });
+  });
 
   document.getElementById('addTaskBtn').addEventListener('click', ()=>openTaskModal(null));
   document.getElementById('addTodoBtn').addEventListener('click', ()=>openTodoModal(null));
+  document.getElementById('addHomeworkBtn').addEventListener('click', ()=>openHomeworkModal(null));
+  document.getElementById('homeworkCancelBtn').addEventListener('click', closeHomeworkModal);
+  document.getElementById('homeworkSaveBtn').addEventListener('click', saveHomeworkModal);
   document.getElementById('todoCancelBtn').addEventListener('click', closeTodoModal);
   document.getElementById('todoSaveBtn').addEventListener('click', saveTodoModal);
   document.querySelectorAll('#todoScheduleTypeTabs .seg-btn').forEach(btn=>{

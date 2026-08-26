@@ -7,6 +7,21 @@
 
 _(tính đến 26/08/2026)_
 
+- **[26/08/2026]** Tính năng mới **"📚 Bài tập về nhà"**: card ngay trên trang
+  Hôm nay (không tách tab riêng), mỗi bài gồm môn học (chọn từ 10 môn dạng
+  chip), nội dung, hạn nộp (custom date-picker, chỉ chọn được từ hôm nay trở
+  đi), ghi chú, trạng thái chưa làm/đã xong. CRUD đầy đủ (`app.js`:
+  `openHomeworkModal`/`saveHomeworkModal`/`toggleHomeworkDone`/
+  `deleteHomeworkItem`). **Tự động xoá khỏi hệ thống khi sang ngày mới** (dù
+  đã làm hay chưa) — không track lịch sử nhiều ngày, xem "Quyết định kỹ thuật"
+  bên dưới. Đã verify CRUD + cơ chế tự xoá bằng browser test thật (seed data
+  hạn "hôm qua" → reload → tự biến mất).
+- **[26/08/2026]** Push notification cho bài tập về nhà (`send-reminders.js`):
+  báo bài **chưa làm xong**, còn 2 ngày/1 ngày/đúng hôm nay là hạn nộp. Ngày
+  thường chỉ báo khung tối (19h-20h); T7/CN báo được ở bất kỳ khung nào trong
+  3 khung sẵn có, tối đa 1 lần/ngày. Gộp chung vào 1 push với nhắc checklist
+  (nếu cùng lúc có cả 2) thay vì gửi 2 thông báo riêng. Tái dùng nguyên hạ
+  tầng cron 3 khung giờ đã có, không cần thêm workflow/cron mới.
 - **[26/08/2026]** Fix bug huy hiệu to-do (🌱 3 ngày...) mở khoá SAI/sớm hơn
   thực tế: `calcTodoStreak()` trước đây tính lại "ngày X đã xong hết to-do
   chưa" từ danh sách to-do **hiện tại** mỗi lần gọi, nên sửa/xoá 1 to-do sẽ
@@ -53,6 +68,21 @@ user)_
 
 ## Quyết định kỹ thuật quan trọng
 
+- **[26/08/2026] Bài tập về nhà KHÔNG track nhiều ngày — tự xoá khi sang ngày
+  mới.** Lý do (theo yêu cầu user): mỗi bài chỉ liên quan 1 khoảng thời gian
+  ngắn (vài ngày tới hạn nộp), không cần giữ lịch sử/streak như to-do. Implement
+  bằng filter `dueDate >= todayKey()` ở 2 lớp: `normalizeAppData()` (dọn lúc
+  app khởi động — trường hợp chính) + phòng hờ trong `renderHomeworkCard()`
+  (trường hợp app mở xuyên nửa đêm không tải lại trang). Do đó hạn nộp cũng bị
+  giới hạn chỉ chọn được từ hôm nay trở đi (giống pattern task/todo "1 lần"),
+  để tránh vừa thêm bài hạn quá khứ đã bị tự xoá ngay.
+- **[26/08/2026] Nhắc bài tập tái dùng 3 khung cron sẵn có, không thêm cron
+  mới.** Lý do: đơn giản hoá — thay vì thêm 1 lịch cron riêng cho "12h trước
+  hạn", chỉ cần thêm điều kiện `homeworkWindowAllowed` (ngày thường = chỉ khung
+  `evening`; cuối tuần = cả 3 khung) và cờ `schedule.homeworkSent` (reset theo
+  `dateKey`, y hệt cách `notifySchedule` cũ hoạt động) để đảm bảo tối đa 1
+  push/ngày cho phần bài tập, dù khung nào bắt được cơ hội gửi trước. Phần
+  checklist cũ giữ nguyên hành vi 100%, không bị ảnh hưởng.
 - **[26/08/2026] Chốt lịch sử hoàn thành to-do (`todoCompleteDays`) thay vì
   tính lại từ lịch hiện tại.** Lý do: `todosForDate()` luôn đọc danh sách
   to-do **hiện tại** (`p.todos`) để suy ra "ngày X có những to-do nào" — kể cả
@@ -83,6 +113,11 @@ user)_
 
 ## Việc tồn đọng / Next steps
 
+- **Cần chạy thử push bài tập về nhà bằng `workflow_dispatch`** (chọn
+  `window: evening`, `force_send: true`) sau khi deploy — máy làm việc hiện
+  tại không có Node cài sẵn nên chỉ rà cú pháp/logic `send-reminders.js` bằng
+  mắt, chưa chạy thật được (kể cả `node --check`). Ưu tiên test trước khi tin
+  tưởng hoàn toàn vào phần nhắc bài tập mới.
 - **Cần user test thật trên iPhone** phần custom date-picker (từ phiên trước) —
   đã verify bằng browser giả lập, chưa có xác nhận trên thiết bị thật.
 - **Cần theo dõi thực tế khung thông báo mới** (`weekend_morning` 10h-11h thứ
@@ -91,10 +126,12 @@ user)_
   chắn gửi đúng giờ, đúng ngày, và text rút gọn hiển thị đúng trên điện thoại
   thật (mới verify bằng cách chạy hàm dựng text trong browser, chưa nhận
   notification thật).
-- File `_notify_update/send-reminders.js` là bản sao **y hệt**
-  `.github/scripts/send-reminders.js` (đã diff, không lệch dòng nào). Chưa rõ
-  mục đích (backup thủ công? file cũ quên xoá?) — nên hỏi user và cân nhắc xoá
-  để tránh phải sửa đồng thời 2 nơi khi update script gửi thông báo.
+- File `_notify_update/send-reminders.js` là bản sao của
+  `.github/scripts/send-reminders.js` — **giờ đã lệch xa hơn** vì bản chính
+  vừa được thêm ~90 dòng logic nhắc bài tập về nhà, còn bản backup này chưa
+  cập nhật theo. Chưa rõ mục đích file này (backup thủ công? file cũ quên
+  xoá?) — nên hỏi user và cân nhắc xoá hẳn để tránh phải sửa đồng thời 2 nơi
+  mỗi lần update script gửi thông báo.
 - Chưa có `README.md` mô tả cách setup Firebase project mới / deploy từ đầu
   cho người khác join dự án (hiện tại chỉ có comment rải rác trong code).
 - Luôn nhớ bump `CACHE_NAME` trong `sw.js` mỗi khi sửa `index.html`/`app.js`/

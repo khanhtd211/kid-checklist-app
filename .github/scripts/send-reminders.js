@@ -1,9 +1,15 @@
-// Gửi thông báo nhắc nhở checklist qua Firebase Cloud Messaging.
+// Gửi thông báo nhắc nhở checklist + bài tập về nhà qua Firebase Cloud Messaging.
 // Được chạy bởi GitHub Actions theo lịch — xem .github/workflows/send-reminders.yml
 //
 // Mỗi gia đình (mã đồng bộ) có 1 document trong collection "families" trên Firestore,
 // chứa: json (toàn bộ dữ liệu app), notifyTokens (danh sách thiết bị đã bật thông báo),
-// notifySchedule (giờ ngẫu nhiên đã chọn cho hôm nay + đã gửi chưa).
+// notifySchedule (giờ ngẫu nhiên đã chọn cho hôm nay + đã gửi chưa, dùng chung cho cả
+// nhắc checklist và nhắc bài tập).
+//
+// Nhắc bài tập về nhà: báo cho các bài CHƯA làm xong, còn 2 ngày / 1 ngày / ngay hôm nay
+// là hạn nộp. Ngày thường chỉ báo vào khung "evening" (buổi tối) cho bé dễ theo dõi;
+// thứ 7/chủ nhật báo ở bất kỳ khung nào trong 3 khung (khung nào tới trước trong ngày thì
+// gửi), tối đa 1 lần/ngày — không lặp lại ở các khung sau cùng ngày.
 const admin = require('firebase-admin');
 
 const WINDOW = process.env.NOTIFY_WINDOW; // 'weekend_morning' | 'afternoon' | 'evening'
@@ -48,6 +54,58 @@ function vnParts() {
 // 0 Chủ nhật .. 6 Thứ 7 — giống weekdayOf() trong app.js
 function weekdayOf(y, mo, d) {
   return new Date(Date.UTC(y, mo - 1, d)).getUTCDay();
+}
+
+// Số ngày từ dateKeyA đến dateKeyB (B - A), cả 2 dạng 'YYYY-MM-DD'.
+function daysBetween(dateKeyA, dateKeyB) {
+  const [ay, am, ad] = dateKeyA.split('-').map(Number);
+  const [by, bm, bd] = dateKeyB.split('-').map(Number);
+  const a = Date.UTC(ay, am - 1, ad);
+  const b = Date.UTC(by, bm - 1, bd);
+  return Math.round((b - a) / 86400000);
+}
+
+// Giữ đồng bộ nội dung với SUBJECT_CHOICES trong app.js (không có module chung để import).
+const SUBJECT_MAP = {
+  toan: { name: 'Toán', emoji: '🧮' },
+  tviet: { name: 'Tiếng Việt', emoji: '📖' },
+  tanh: { name: 'Tiếng Anh', emoji: '🔤' },
+  khoahoc: { name: 'Khoa học', emoji: '🔬' },
+  daoduc: { name: 'Đạo đức', emoji: '💛' },
+  thedu: { name: 'Thể dục', emoji: '🏃' },
+  mythuat: { name: 'Mỹ thuật', emoji: '🎨' },
+  amnhac: { name: 'Âm nhạc', emoji: '🎵' },
+  tinhoc: { name: 'Tin học', emoji: '💻' },
+  khac: { name: 'Khác', emoji: '📚' },
+};
+
+// Với mỗi bé: lấy các bài tập CHƯA làm xong, hạn nộp còn 0/1/2 ngày nữa (đã tự loại bài
+// quá hạn — dueDate < hôm nay — phòng trường hợp máy bé lâu chưa mở app để dọn lại).
+function getHomeworkAlerts(appData, dateKey) {
+  const profiles = appData.profiles || [];
+  return profiles
+    .map(p => {
+      const items = (p.homework || [])
+        .filter(h => h.status !== 'done' && h.dueDate >= dateKey)
+        .map(h => Object.assign({}, h, { daysLeft: daysBetween(dateKey, h.dueDate) }))
+        .filter(h => h.daysLeft === 0 || h.daysLeft === 1 || h.daysLeft === 2)
+        .sort((a, b) => a.daysLeft - b.daysLeft);
+      return { name: p.name || 'Bé', items };
+    })
+    .filter(p => p.items.length > 0);
+}
+
+function homeworkItemLabel(h) {
+  const s = SUBJECT_MAP[h.subject] || { name: 'Bài tập', emoji: '📚' };
+  const when = h.daysLeft === 0 ? 'hạn hôm nay' : h.daysLeft === 1 ? 'hạn ngày mai' : 'còn 2 ngày nữa tới hạn';
+  return `${s.emoji} ${s.name} (${when})`;
+}
+
+function buildHomeworkBody(alerts) {
+  if (alerts.length === 1) {
+    return `📖 ${alerts[0].name} có bài tập cần làm: ${alerts[0].items.map(homeworkItemLabel).join(', ')}`;
+  }
+  return alerts.map(a => `📖 ${a.name}: ${a.items.map(homeworkItemLabel).join(', ')}`).join('\n');
 }
 
 // Tính trạng thái checklist hôm nay của từng bé: đã xong hết chưa, còn thiếu bao nhiêu việc.
@@ -97,8 +155,13 @@ async function run() {
   const wd = weekdayOf(y, mo, d);
   const win = WINDOWS[WINDOW];
 
+  const isWeekend = (wd === 0 || wd === 6);
+  // Ngày thường: bài tập chỉ báo vào khung tối. Cuối tuần: báo được ở cả 3 khung
+  // (khung nào tới trước trong ngày thì gửi, xem schedule.homeworkSent bên dưới).
+  const homeworkWindowAllowed = isWeekend || WINDOW === 'evening';
+
   const snap = await db.collection('families').get();
-  let sentCount = 0, skippedAllDone = 0, tooEarly = 0, alreadySent = 0;
+  let sentCount = 0, skippedAllDone = 0, tooEarly = 0, alreadySent = 0, homeworkSentCount = 0;
 
   for (const doc of snap.docs) {
     const data = doc.data() || {};
@@ -117,7 +180,7 @@ async function run() {
     }
     const slot = schedule[WINDOW];
 
-    if (slot.sent && !FORCE) { alreadySent++; continue; }
+    if (slot.sent && !FORCE && (schedule.homeworkSent || !homeworkWindowAllowed)) { alreadySent++; continue; }
     if (!FORCE && minuteOfDay < slot.targetMinute) {
       tooEarly++;
       // Lưu lại ngay để giờ ngẫu nhiên hôm nay không bị đổi lại ở lần kiểm tra sau.
@@ -129,20 +192,36 @@ async function run() {
     try { appData = data.json ? JSON.parse(data.json) : null; } catch (e) { appData = null; }
     if (!appData) { continue; }
 
-    const statuses = getProfileStatuses(appData, dateKey, wd);
-    const allDone = statuses.length > 0 && statuses.every(s => s.done);
+    // ----- Phần checklist (giữ nguyên hành vi cũ) -----
+    let checklistBody = null;
+    if (slot.sent && !FORCE) {
+      // Đã gửi phần checklist ở khung này rồi — chỉ còn xét phần bài tập bên dưới.
+    } else {
+      const statuses = getProfileStatuses(appData, dateKey, wd);
+      const allDone = statuses.length > 0 && statuses.every(s => s.done);
+      // Nếu tất cả bé đã xong hết: chỉ khen 1 lần duy nhất vào buổi TỐI, sáng cuối tuần và
+      // buổi chiều bỏ qua (tránh khen 2-3 lần/ngày khi bé xong việc sớm).
+      if (allDone && (WINDOW === 'weekend_morning' || WINDOW === 'afternoon')) {
+        skippedAllDone++;
+        slot.sent = true;
+      } else {
+        checklistBody = allDone ? buildAllDoneBody(statuses) : buildMixedBody(statuses);
+      }
+    }
 
-    // Nếu tất cả bé đã xong hết: chỉ khen 1 lần duy nhất vào buổi TỐI, sáng cuối tuần và
-    // buổi chiều bỏ qua (tránh khen 2-3 lần/ngày khi bé xong việc sớm).
-    if (allDone && (WINDOW === 'weekend_morning' || WINDOW === 'afternoon')) {
-      skippedAllDone++;
-      slot.sent = true;
+    // ----- Phần bài tập về nhà -----
+    let homeworkBody = null;
+    if (homeworkWindowAllowed && (FORCE || !schedule.homeworkSent)) {
+      const alerts = getHomeworkAlerts(appData, dateKey);
+      if (alerts.length) homeworkBody = buildHomeworkBody(alerts);
+    }
+
+    const bodyParts = [checklistBody, homeworkBody].filter(Boolean);
+    if (!bodyParts.length) {
       await doc.ref.set({ notifySchedule: schedule }, { merge: true });
       continue;
     }
-
-    const body = allDone ? buildAllDoneBody(statuses) : buildMixedBody(statuses);
-    if (!body) { continue; }
+    const body = bodyParts.join('\n\n');
 
     try {
       const resp = await admin.messaging().sendEachForMulticast({
@@ -160,7 +239,8 @@ async function run() {
         }
       });
       const cleanTokens = badTokens.length ? tokens.filter(t => !badTokens.includes(t)) : tokens;
-      slot.sent = true;
+      if (checklistBody) slot.sent = true;
+      if (homeworkBody) { schedule.homeworkSent = true; homeworkSentCount++; }
       await doc.ref.set({ notifySchedule: schedule, notifyTokens: cleanTokens }, { merge: true });
       sentCount++;
     } catch (e) {
@@ -168,7 +248,7 @@ async function run() {
     }
   }
 
-  console.log(`[${WINDOW}${FORCE ? ' (FORCE test)' : ''}] Đã gửi: ${sentCount}, bỏ qua (chiều đã xong hết): ${skippedAllDone}, chưa tới giờ: ${tooEarly}, đã gửi từ trước: ${alreadySent}`);
+  console.log(`[${WINDOW}${FORCE ? ' (FORCE test)' : ''}] Đã gửi: ${sentCount} (bài tập: ${homeworkSentCount}), bỏ qua (chiều đã xong hết): ${skippedAllDone}, chưa tới giờ: ${tooEarly}, đã gửi từ trước: ${alreadySent}`);
 }
 
 run().catch(e => { console.error(e); process.exit(1); });
