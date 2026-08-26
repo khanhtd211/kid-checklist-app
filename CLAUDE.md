@@ -46,13 +46,8 @@ icons/                         Icon app (icon-192, icon-512, apple-touch-icon)
   send-reminders.yml           Cron: gọi .github/scripts/send-reminders.js
 .github/scripts/
   send-reminders.js            Script Node — quét families/{code} có notifyTokens,
-                                kiểm tra checklist chưa xong hôm nay, gửi FCM
+                                kiểm tra checklist + bài tập về nhà chưa xong, gửi FCM
   package.json                 Dependency: firebase-admin
-
-_notify_update/
-  send-reminders.js            Bản sao y hệt .github/scripts/send-reminders.js
-                                (có vẻ là backup thủ công / scratch — xem
-                                PROGRESS.md mục "Việc tồn đọng")
 ```
 
 ## Quy ước code

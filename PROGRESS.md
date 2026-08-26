@@ -16,6 +16,11 @@ _(tính đến 26/08/2026)_
   đã làm hay chưa) — không track lịch sử nhiều ngày, xem "Quyết định kỹ thuật"
   bên dưới. Đã verify CRUD + cơ chế tự xoá bằng browser test thật (seed data
   hạn "hôm qua" → reload → tự biến mất).
+- **[26/08/2026]** Xoá hẳn `_notify_update/send-reminders.js` (bản sao trùng
+  của `.github/scripts/send-reminders.js`, không được workflow nào dùng tới,
+  không rõ mục đích) — sau khi thêm logic nhắc bài tập vào bản chính, 2 file
+  lệch nhau 112 dòng, dễ gây nhầm lẫn nếu ai đó sửa nhầm file. User xác nhận
+  xoá.
 - **[26/08/2026]** Push notification cho bài tập về nhà (`send-reminders.js`):
   báo bài **chưa làm xong**, còn 2 ngày/1 ngày/đúng hôm nay là hạn nộp. Ngày
   thường chỉ báo khung tối (19h-20h); T7/CN báo được ở bất kỳ khung nào trong
@@ -126,12 +131,6 @@ user)_
   chắn gửi đúng giờ, đúng ngày, và text rút gọn hiển thị đúng trên điện thoại
   thật (mới verify bằng cách chạy hàm dựng text trong browser, chưa nhận
   notification thật).
-- File `_notify_update/send-reminders.js` là bản sao của
-  `.github/scripts/send-reminders.js` — **giờ đã lệch xa hơn** vì bản chính
-  vừa được thêm ~90 dòng logic nhắc bài tập về nhà, còn bản backup này chưa
-  cập nhật theo. Chưa rõ mục đích file này (backup thủ công? file cũ quên
-  xoá?) — nên hỏi user và cân nhắc xoá hẳn để tránh phải sửa đồng thời 2 nơi
-  mỗi lần update script gửi thông báo.
 - Chưa có `README.md` mô tả cách setup Firebase project mới / deploy từ đầu
   cho người khác join dự án (hiện tại chỉ có comment rải rác trong code).
 - Luôn nhớ bump `CACHE_NAME` trong `sw.js` mỗi khi sửa `index.html`/`app.js`/
