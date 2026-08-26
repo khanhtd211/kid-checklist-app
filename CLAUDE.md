@@ -32,9 +32,12 @@ cài vào Home Screen như app native).
 ## Cấu trúc thư mục chính
 
 ```
-index.html                     Toàn bộ UI: 7 "page" (today/todo/voucher/history/
-                                stats/settings/datamanage) + tất cả modal
-app.js                         Toàn bộ logic JS (~1950 dòng, 1 file, không module)
+index.html                     Toàn bộ UI: các "page" chính trong tabbar (today/
+                                todo/voucher/stats/settings) + page phụ không nằm
+                                trong tabbar, mở qua nút riêng (history — mở từ nút
+                                📜 ở đầu trang stats; datamanage — mở từ nút ở
+                                trang settings) + picker + tất cả modal
+app.js                         Toàn bộ logic JS (~2000 dòng, 1 file, không module)
 style.css                      Style, dùng CSS variables (--pink, --green...) +
                                 dark mode qua @media (prefers-color-scheme: dark)
 sw.js                          Service worker — nhớ bump CACHE_NAME mỗi khi sửa

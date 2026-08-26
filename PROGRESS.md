@@ -7,6 +7,19 @@
 
 _(tính đến 26/08/2026)_
 
+- **[26/08/2026]** Gộp tab **Lịch sử** vào tab **Thống kê**: bỏ hẳn khỏi
+  tabbar dưới (giảm 6 tab còn 5), chuyển trang Lịch sử thành trang phụ mở qua
+  1 nút 📜 nhỏ ở đầu trang Thống kê — tái dùng đúng pattern điều hướng
+  "trang phụ có nút ← quay lại" mà trang Quản lý dữ liệu đã dùng (không phát
+  sinh cơ chế mới). Lý do: tab Lịch sử ít dùng, ý nghĩa gần trùng Thống kê.
+  Đã verify luồng mở/đóng bằng browser test thật.
+- **[26/08/2026]** Kèm theo commit ở trên: 1 phần sửa dở **có sẵn trong
+  working tree từ đầu phiên** (không phải do phiên này tạo ra, nghi là của 1
+  phiên Claude Code khác chạy song song/máy khác, chưa commit) — bỏ khung
+  "🎯 Còn X sao nữa để nhận..." ở trang Hôm nay, đổi emoji card bài tập về
+  nhà 📚→🎒. Đã hỏi user xác nhận nhưng chưa nhận được câu trả lời rõ ràng
+  trước khi user chạy `/init-context` tiếp — **commit chung theo yêu cầu
+  auto-push đã thiết lập**, xem "Việc tồn đọng" bên dưới để theo dõi lại.
 - **[26/08/2026]** Tính năng mới **"📚 Bài tập về nhà"**: card ngay trên trang
   Hôm nay (không tách tab riêng), mỗi bài gồm môn học (chọn từ 10 môn dạng
   chip), nội dung, hạn nộp (custom date-picker, chỉ chọn được từ hôm nay trở
@@ -118,6 +131,11 @@ user)_
 
 ## Việc tồn đọng / Next steps
 
+- **Cần user xác nhận việc bỏ khung "🎯 Còn X sao nữa để nhận..." ở trang
+  Hôm nay là chủ đích** (đã bị gộp chung vào commit lần này vì đang nằm sẵn
+  uncommitted trong working tree, user chưa trả lời rõ khi được hỏi) — nếu
+  không phải chủ đích, cần khôi phục lại (xem git history quanh commit gộp
+  tab Lịch sử, hoặc file cũ có đoạn `nextRewardBox`/`.next-reward`).
 - **Cần chạy thử push bài tập về nhà bằng `workflow_dispatch`** (chọn
   `window: evening`, `force_send: true`) sau khi deploy — máy làm việc hiện
   tại không có Node cài sẵn nên chỉ rà cú pháp/logic `send-reminders.js` bằng

@@ -506,7 +506,7 @@ function renderHomeworkCard(){
     else summaryEl.textContent = `${pendingCount} bài chưa làm`;
   }
   if(list.length === 0){
-    el.innerHTML = `<div class="empty-state"><span class="big">📚</span>Chưa có bài tập nào được ghi lại.<br>Bấm "+ Thêm bài tập" để bắt đầu nhé!</div>`;
+    el.innerHTML = `<div class="empty-state"><span class="big">🎒</span>Chưa có bài tập nào được ghi lại.<br>Bấm "+ Thêm bài tập" để bắt đầu nhé!</div>`;
     return;
   }
   el.innerHTML = list.map(h=>{
@@ -591,16 +591,6 @@ function renderToday(){
   document.getElementById('progressFill').style.width = pct + '%';
   document.getElementById('progressLabel').textContent = `${done}/${total} việc đã xong`;
   document.getElementById('progressPct').textContent = pct + '%';
-
-  const nr = nextReward();
-  const nextRewardBox = document.getElementById('nextRewardBox');
-  if(nr){
-    nextRewardBox.innerHTML = `🎯 Còn <b>${Math.max(0, nr.threshold-p.stars)} sao</b> nữa để nhận <b>${nr.emoji} ${nr.title}</b>`;
-  } else if(p.rewards.length){
-    nextRewardBox.innerHTML = `🏆 Đã đạt hết các mốc thưởng hiện có!`;
-  } else {
-    nextRewardBox.innerHTML = `Chưa có mốc thưởng nào. Vào mục Cài đặt để thêm nhé!`;
-  }
 
   const taskListEl = document.getElementById('taskList');
   taskListEl.innerHTML = '';
@@ -1656,7 +1646,7 @@ function switchTab(name){
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.getElementById('page-'+name).classList.add('active');
   document.querySelectorAll('.tabbar button').forEach(b=>b.classList.toggle('active', b.dataset.tab===name));
-  document.getElementById('tabbar').style.display = (name==='picker' || name==='datamanage') ? 'none' : 'flex';
+  document.getElementById('tabbar').style.display = (name==='picker' || name==='datamanage' || name==='history') ? 'none' : 'flex';
   if(name==='today') renderToday();
   if(name==='todo') renderTodoPage();
   if(name==='stats') renderStats();
@@ -2067,6 +2057,8 @@ document.addEventListener('DOMContentLoaded', ()=>{
   document.getElementById('backFromPicker').addEventListener('click', ()=> switchTab('today'));
   document.getElementById('openDataManageBtn').addEventListener('click', ()=> switchTab('datamanage'));
   document.getElementById('backFromDataManage').addEventListener('click', ()=> switchTab('settings'));
+  document.getElementById('openHistoryBtn').addEventListener('click', ()=> switchTab('history'));
+  document.getElementById('backFromHistory').addEventListener('click', ()=> switchTab('stats'));
   document.getElementById('notifyEnableBtn').addEventListener('click', toggleNotificationsFlow);
 
   document.getElementById('childNameInput').addEventListener('change', (e)=>{

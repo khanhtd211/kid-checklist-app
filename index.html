@@ -52,12 +52,10 @@
       <div>Con thật tuyệt vời!</div>
     </div>
 
-    <div class="next-reward" id="nextRewardBox"></div>
-
     <div id="taskList"></div>
 
     <div class="card">
-      <div class="section-title">📚 Bài tập về nhà <span class="hw-summary" id="homeworkSummary"></span></div>
+      <div class="section-title">🎒 Bài tập về nhà <span class="hw-summary" id="homeworkSummary"></span></div>
       <div id="homeworkList"></div>
       <button class="add-btn" id="addHomeworkBtn" style="background:#8a63d2">+ Thêm bài tập</button>
     </div>
@@ -101,8 +99,11 @@
   <!-- STATS -->
   <div class="page" id="page-stats">
     <div class="topbar">
-      <div class="greet" id="statsProfileName">Thống kê tuần này</div>
+      <div class="topbar-mid">
+        <div class="greet" id="statsProfileName">Thống kê tuần này</div>
+      </div>
       <div class="stars-badge" id="statsStars">⭐ 0</div>
+      <button class="icon-btn" id="openHistoryBtn" title="Xem lịch sử nhận sao">📜</button>
     </div>
 
     <div class="card">
@@ -126,10 +127,13 @@
     </div>
   </div>
 
-  <!-- HISTORY -->
+  <!-- HISTORY (trang phụ, mở từ nút 📜 ở trang Thống kê — không nằm trong tabbar) -->
   <div class="page" id="page-history">
     <div class="topbar">
-      <div class="greet" id="historyProfileName">Lịch sử nhận sao</div>
+      <button class="icon-btn" id="backFromHistory">←</button>
+      <div class="topbar-mid">
+        <div class="greet" id="historyProfileName">Lịch sử nhận sao</div>
+      </div>
       <div class="stars-badge" id="historyStars">⭐ 0</div>
     </div>
 
@@ -237,7 +241,6 @@
   <button class="active" data-tab="today"><span class="icon-wrap"><span class="icon">📋</span><span class="tab-badge today" id="tabBadgeToday"></span></span>Hôm nay</button>
   <button data-tab="todo"><span class="icon-wrap"><span class="icon">🗒️</span><span class="tab-badge todo" id="tabBadgeTodo"></span></span>To-do</button>
   <button data-tab="voucher"><span class="icon-wrap"><span class="icon">🎫</span><span class="tab-badge voucher" id="tabBadgeVoucher"></span></span>Phiếu quà</button>
-  <button data-tab="history"><span class="icon">📜</span>Lịch sử</button>
   <button data-tab="stats"><span class="icon">📊</span>Thống kê</button>
   <button data-tab="settings"><span class="icon">⚙️</span>Cài đặt</button>
 </div>
