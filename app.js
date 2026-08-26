@@ -2057,7 +2057,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
   document.getElementById('backFromPicker').addEventListener('click', ()=> switchTab('today'));
   document.getElementById('openDataManageBtn').addEventListener('click', ()=> switchTab('datamanage'));
   document.getElementById('backFromDataManage').addEventListener('click', ()=> switchTab('settings'));
-  document.getElementById('openHistoryBtn').addEventListener('click', ()=> switchTab('history'));
+  document.getElementById('statsStars').addEventListener('click', ()=> switchTab('history'));
   document.getElementById('backFromHistory').addEventListener('click', ()=> switchTab('stats'));
   document.getElementById('notifyEnableBtn').addEventListener('click', toggleNotificationsFlow);
 

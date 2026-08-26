@@ -8,11 +8,14 @@
 _(tính đến 26/08/2026)_
 
 - **[26/08/2026]** Gộp tab **Lịch sử** vào tab **Thống kê**: bỏ hẳn khỏi
-  tabbar dưới (giảm 6 tab còn 5), chuyển trang Lịch sử thành trang phụ mở qua
-  1 nút 📜 nhỏ ở đầu trang Thống kê — tái dùng đúng pattern điều hướng
-  "trang phụ có nút ← quay lại" mà trang Quản lý dữ liệu đã dùng (không phát
-  sinh cơ chế mới). Lý do: tab Lịch sử ít dùng, ý nghĩa gần trùng Thống kê.
-  Đã verify luồng mở/đóng bằng browser test thật.
+  tabbar dưới (giảm 6 tab còn 5), chuyển trang Lịch sử thành trang phụ —
+  tái dùng đúng pattern điều hướng "trang phụ có nút ← quay lại" mà trang
+  Quản lý dữ liệu đã dùng (không phát sinh cơ chế mới). Lý do: tab Lịch sử ít
+  dùng, ý nghĩa gần trùng Thống kê. **Cách mở đã đổi 2 lần trong cùng ngày:**
+  bản đầu dùng 1 nút 📜 riêng ở đầu trang Thống kê → sau đó user yêu cầu gộp
+  luôn vào nút sao ⭐ sẵn có (không tách 2 nút) — bản cuối cùng: bấm thẳng vào
+  `#statsStars` (đã có sẵn style `.stars-badge` dạng nút bấm) để mở, không
+  còn nút 📜 riêng nữa. Đã verify cả 2 bản bằng browser test thật.
 - **[26/08/2026]** Kèm theo commit ở trên: 1 phần sửa dở **có sẵn trong
   working tree từ đầu phiên** (không phải do phiên này tạo ra, nghi là của 1
   phiên Claude Code khác chạy song song/máy khác, chưa commit) — bỏ khung

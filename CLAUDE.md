@@ -34,9 +34,9 @@ cài vào Home Screen như app native).
 ```
 index.html                     Toàn bộ UI: các "page" chính trong tabbar (today/
                                 todo/voucher/stats/settings) + page phụ không nằm
-                                trong tabbar, mở qua nút riêng (history — mở từ nút
-                                📜 ở đầu trang stats; datamanage — mở từ nút ở
-                                trang settings) + picker + tất cả modal
+                                trong tabbar, mở qua nút riêng (history — bấm vào
+                                nút sao #statsStars ở đầu trang stats; datamanage —
+                                mở từ nút ở trang settings) + picker + tất cả modal
 app.js                         Toàn bộ logic JS (~2000 dòng, 1 file, không module)
 style.css                      Style, dùng CSS variables (--pink, --green...) +
                                 dark mode qua @media (prefers-color-scheme: dark)
