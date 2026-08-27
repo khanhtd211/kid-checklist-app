@@ -7,6 +7,16 @@
 
 _(tính đến 27/08/2026)_
 
+- **[27/08/2026]** Crop icon lần 2 — user test trên điện thoại thật báo vẫn
+  còn dính viền trắng mỏng ở trái/phải/trên (đáy đã ổn từ lần crop trước).
+  Nguyên nhân: lần crop đầu có bước "làm vuông" khung bằng cách đệm thêm ~8px
+  mỗi bên trái/phải cho khớp tỷ lệ 1:1 (ảnh gốc rộng 1145 x cao 1161, không
+  vuông sẵn) — vô tình để lại đúng phần viền trắng đó. Sửa: bỏ hẳn bước đệm,
+  cắt khít đúng theo bounding box nội dung thật ở trái/phải (X=54, W=1145,
+  mép phải trùng khít mép nội dung), và cắt sâu thêm 16px ở trên (Y=59 thay
+  vì 43) — trong khi đáy giữ nguyên mép cũ (không đụng, vì user báo đã ổn).
+  Đã xem lại bản 192px và 512px: hết viền trắng thừa 3 cạnh, lá trên cùng
+  chưa bị cắt vào hình (vẫn còn margin phía trên tip lá).
 - **[27/08/2026]** Đổi hẳn icon app (`icons/icon-192.png`, `icons/icon-512.png`,
   `icons/apple-touch-icon.png`) sang thiết kế mới do **user tự tạo** (không
   phải AI của Claude vẽ — sau vài vòng thử vẽ icon "cây" bằng SVG tay không ra
