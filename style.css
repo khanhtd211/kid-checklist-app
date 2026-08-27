@@ -143,6 +143,7 @@ button{font-family:inherit;}
   box-shadow:0 1px 3px rgba(0,0,0,.3);
 }
 .tab-badge.today{background:var(--green);}
+.tab-badge.homework{background:#8a63d2;}
 .tab-badge.todo{background:#4fa8ff;}
 .tab-badge.voucher{background:#c9760f;}
 
@@ -167,6 +168,11 @@ button{font-family:inherit;}
 .streak-badge{
   display:flex;align-items:center;gap:6px;background:linear-gradient(135deg,#ff9a56,#ff6b6b);color:#fff;
   border-radius:999px;padding:8px 14px;font-weight:800;font-size:14px;white-space:nowrap;flex-shrink:0;
+  box-shadow:0 2px 10px rgba(0,0,0,.08);
+}
+.hw-summary-badge{
+  display:flex;align-items:center;gap:6px;background:#8a63d2;color:#fff;
+  border-radius:999px;padding:8px 14px;font-weight:800;font-size:13px;white-space:nowrap;flex-shrink:0;
   box-shadow:0 2px 10px rgba(0,0,0,.08);
 }
 .todo-badge-grid{display:flex;flex-wrap:wrap;gap:10px;}
@@ -254,6 +260,7 @@ button{font-family:inherit;}
 .hw-due{font-size:12px;font-weight:700;color:var(--muted);margin-top:3px;}
 .hw-due.today{color:#c9760f;}
 .hw-due.soon{color:#8a63d2;}
+.hw-due.overdue{color:var(--red);}
 .hw-checkbox.checked{background:#8a63d2;border-color:#8a63d2;}
 
 .past-todo-details{margin-top:8px;}

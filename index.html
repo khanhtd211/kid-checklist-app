@@ -53,12 +53,34 @@
     </div>
 
     <div id="taskList"></div>
+  </div>
+
+  <!-- HOMEWORK (Bài tập về nhà) -->
+  <div class="page" id="page-homework">
+    <div class="topbar">
+      <div class="topbar-mid">
+        <div class="greet">🎒 Bài tập về nhà</div>
+        <div class="date" id="homeworkDate"></div>
+      </div>
+      <div class="hw-summary-badge" id="homeworkSummary" style="display:none"></div>
+    </div>
 
     <div class="card">
-      <div class="section-title">🎒 Bài tập về nhà <span class="hw-summary" id="homeworkSummary"></span></div>
-      <div id="homeworkList"></div>
-      <button class="add-btn" id="addHomeworkBtn" style="background:#8a63d2">+ Thêm bài tập</button>
+      <div class="section-title">📊 Thống kê tháng này</div>
+      <div class="history-summary">
+        <div class="history-summary-item"><span>✅ Đã hoàn thành</span><b id="homeworkStatDone">0</b></div>
+        <div class="history-summary-item"><span>⚠️ Quá hạn</span><b id="homeworkStatOverdue">0</b></div>
+      </div>
     </div>
+
+    <div class="card" id="homeworkOverdueCard" style="display:none">
+      <div class="section-title" id="homeworkOverdueTitle">⚠️ Quá hạn</div>
+      <div id="homeworkOverdueList"></div>
+    </div>
+
+    <div id="homeworkList"></div>
+
+    <button class="add-btn" id="addHomeworkBtn" style="background:#8a63d2">+ Thêm bài tập</button>
   </div>
 
   <!-- TODO (không bắt buộc) -->
@@ -238,6 +260,7 @@
 
 <div class="tabbar" id="tabbar">
   <button class="active" data-tab="today"><span class="icon-wrap"><span class="icon">📋</span><span class="tab-badge today" id="tabBadgeToday"></span></span>Hôm nay</button>
+  <button data-tab="homework"><span class="icon-wrap"><span class="icon">🎒</span><span class="tab-badge homework" id="tabBadgeHomework"></span></span>Bài tập</button>
   <button data-tab="todo"><span class="icon-wrap"><span class="icon">🗒️</span><span class="tab-badge todo" id="tabBadgeTodo"></span></span>To-do</button>
   <button data-tab="voucher"><span class="icon-wrap"><span class="icon">🎫</span><span class="tab-badge voucher" id="tabBadgeVoucher"></span></span>Phiếu quà</button>
   <button data-tab="stats"><span class="icon">📊</span>Thống kê</button>
@@ -256,6 +279,7 @@
       <label>Biểu tượng</label>
       <div class="emoji-picker" id="taskEmojiPicker"></div>
       <input type="hidden" id="taskEmojiInput">
+      <p class="modal-hint" id="taskHomeworkLinkHint" style="display:none;margin-top:12px">🔗 Chọn icon 🎒 nghĩa là việc này sẽ tự động tick khi bé ghi ít nhất 1 bài tập về nhà trong ngày (không cần tự tick tay).</p>
     </div>
     <div class="field">
       <label>Loại lịch</label>

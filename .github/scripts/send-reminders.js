@@ -71,11 +71,13 @@ const SUBJECT_MAP = {
   tviet: { name: 'Tiếng Việt', emoji: '📖' },
   tanh: { name: 'Tiếng Anh', emoji: '🔤' },
   khoahoc: { name: 'Khoa học', emoji: '🔬' },
-  daoduc: { name: 'Đạo đức', emoji: '💛' },
-  thedu: { name: 'Thể dục', emoji: '🏃' },
+  vatly: { name: 'Vật lý', emoji: '⚛️' },
+  hoahoc: { name: 'Hoá học', emoji: '🧪' },
+  sinhhoc: { name: 'Sinh học', emoji: '🧬' },
   mythuat: { name: 'Mỹ thuật', emoji: '🎨' },
   amnhac: { name: 'Âm nhạc', emoji: '🎵' },
   tinhoc: { name: 'Tin học', emoji: '💻' },
+  hocthem: { name: 'Học thêm', emoji: '🏫' },
   khac: { name: 'Khác', emoji: '📚' },
 };
 

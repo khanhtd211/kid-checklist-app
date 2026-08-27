@@ -7,6 +7,66 @@
 
 _(tính đến 26/08/2026)_
 
+- **[26/08/2026]** Card **"⚠️ Quá hạn"** + **thống kê tháng này** trong tab
+  Bài tập. Đổi mốc dọn dữ liệu từ **theo NGÀY → theo THÁNG** (đây là thay đổi
+  ngược lại 1 phần quyết định trước đó — xem "Quyết định kỹ thuật"): bài quá
+  hạn (chưa tick xong) giờ KHÔNG bị xoá ngay hôm sau nữa, mà giữ lại tới hết
+  tháng để hiện ở card riêng (vẫn tick/sửa/xoá được bình thường) + tính vào
+  thống kê "✅ Đã hoàn thành" / "⚠️ Quá hạn" trong tháng (`monthKeyOf()`, dùng
+  chung layout `.history-summary` có sẵn từ trang Lịch sử). Bài đã tick xong
+  dù quá hạn vẫn được giữ tới hết tháng (chỉ để tính thống kê, không hiện
+  ở đâu cả — tự động biến mất khỏi mọi danh sách hiển thị). Sang tháng mới,
+  toàn bộ bài tháng cũ (đã làm hay chưa) mới thật sự bị dọn — vẫn giữ tinh
+  thần "không track dữ liệu vô thời hạn", chỉ nới từ 1 ngày lên 1 tháng.
+  Push notification (`send-reminders.js`) **không đổi gì** — vẫn chỉ báo bài
+  còn 0-2 ngày tới hạn, không nhắc bài đã quá hạn (giữ nguyên theo yêu cầu
+  trước đó). Đã verify đầy đủ bằng browser test thật: bài tháng trước bị dọn
+  đúng lúc reload, bài quá hạn (cả đã/chưa làm) được giữ lại đúng, card + số
+  liệu thống kê cập nhật đúng khi tick/bỏ tick.
+- **[26/08/2026]** Đổi danh sách môn học (`SUBJECT_CHOICES` trong `app.js`, +
+  `SUBJECT_MAP` trong `send-reminders.js` — 2 nơi phải giữ đồng bộ, xem
+  comment tại chỗ khai báo): bỏ **Đạo đức**, **Thể dục** (ít dùng theo user);
+  thêm **Vật lý ⚛️**, **Hoá học 🧪**, **Sinh học 🧬**, **Học thêm 🏫**. Bài
+  tập cũ đã lưu với key môn đã bỏ tự fallback về "Khác 📚" (cơ chế fallback
+  có sẵn từ trước, không cần migrate thêm). Đã verify modal hiển thị đúng 12
+  môn mới bằng browser test thật.
+- **[26/08/2026]** Liên kết checklist chính ↔ Bài tập về nhà: chọn icon
+  **🎒 (`HOMEWORK_LINK_EMOJI`)** cho 1 việc bất kỳ trong checklist chính (VD
+  "Ghi BTVN", "Điền bài tập"... — tên gì cũng được) sẽ khiến việc đó tự động
+  được tick khi bé **thêm mới** (không tính sửa) 1 bài tập ở tab Bài tập
+  (`autoTickHomeworkLinkedTasks()`), tính sao bình thường nếu đó là việc cuối
+  cùng còn thiếu trong ngày. Chỉ tick thêm, không tự bỏ tick lại nếu bé xoá
+  bớt bài đã ghi (giữ tinh thần tự giác). **Bản đầu dùng 1 ô tick riêng
+  trong modal Thêm/Sửa việc** (`task.linkHomeworkLog`) — user cho rằng thêm
+  hẳn 1 dòng UI cho tính năng ít người cần là bất hợp lý, nên đổi sang dùng
+  thẳng icon 🎒 (đã có sẵn trong bộ chọn) làm "công tắc": chọn icon đó mới
+  hiện dòng giải thích (`.modal-hint` ẩn/hiện theo icon đang chọn), không
+  thêm field/UI mới nào cho các việc khác. Mục đích: khích lệ bé DÙNG APP để
+  note bài (không phải thưởng cho việc LÀM bài tập — user nhấn mạnh làm bài
+  là nghĩa vụ, không nên gắn sao). Bấm CHỌN icon 🎒 (không phải chỉ mở modal
+  sửa 1 việc đã sẵn icon này) còn tự điền tên việc chuẩn `"Ghi danh sách bài
+  tập về nhà"` (`HOMEWORK_LINK_TASK_TITLE`) cho đồng bộ giữa các gia đình —
+  chỉ điền lúc chủ động bấm chọn, không đụng tên đã đặt khi chỉ mở xem/sửa.
+  Đã verify đầy đủ bằng browser test thật cả 2 bản thiết kế + bản điền tên tự
+  động: hint ẩn/hiện đúng theo icon, tên tự điền đúng lúc bấm chọn và KHÔNG bị
+  ghi đè khi chỉ mở sửa, tick đúng lúc, tính sao đúng lúc (chỉ khi là việc
+  cuối), sửa bài tập không kích hoạt, badge tab Hôm nay cập nhật ngay dù đang
+  đứng ở tab khác.
+- **[26/08/2026]** Xác nhận lại: việc bỏ khung "🎯 Còn X sao nữa để nhận..."
+  ở trang Hôm nay và đổi icon 📚→🎒 (nhắc ở mục "Việc tồn đọng" trước đây) —
+  **đều là chủ đích của user**, có yêu cầu tường minh trong phiên làm việc
+  này ("bỏ luôn card...", "icon quyển sách... nhàm mắt"). Không cần khôi phục.
+- **[26/08/2026]** Tách **"🎒 Bài tập về nhà"** ra tab riêng trên tabbar
+  (trước đó là 1 card trong trang Hôm nay) — tận dụng đúng chỗ trống tabbar
+  vừa gộp Lịch sử vào Thống kê để lại (vẫn 6 nút). Đặt ngay sau tab "Hôm nay".
+  Trang mới có topbar riêng (ngày + badge tổng quan dạng pill màu tím "X bài
+  chưa làm" / "Đã xong hết! 🎉", tự ẩn khi danh sách rỗng), cộng thêm số đếm
+  bài chưa làm trên icon tab (giống cách tab Phiếu quà đang đếm phiếu chưa
+  dùng). Đổi tên hàm `renderHomeworkCard()` → `renderHomeworkPage()` cho đúng
+  quy ước đặt tên (`renderTodoPage`, `renderStats`...). Logic CRUD/tự xoá qua
+  ngày mới giữ nguyên 100%, phần nhắc push notification cho bài tập **không
+  đổi gì** (theo yêu cầu user). Đã verify bằng browser test thật: render
+  trang, đếm badge, chuyển trạng thái xong/chưa xong.
 - **[26/08/2026]** Gộp tab **Lịch sử** vào tab **Thống kê**: bỏ hẳn khỏi
   tabbar dưới (giảm 6 tab còn 5), chuyển trang Lịch sử thành trang phụ —
   tái dùng đúng pattern điều hướng "trang phụ có nút ← quay lại" mà trang
@@ -90,13 +150,19 @@ user)_
 ## Quyết định kỹ thuật quan trọng
 
 - **[26/08/2026] Bài tập về nhà KHÔNG track nhiều ngày — tự xoá khi sang ngày
-  mới.** Lý do (theo yêu cầu user): mỗi bài chỉ liên quan 1 khoảng thời gian
-  ngắn (vài ngày tới hạn nộp), không cần giữ lịch sử/streak như to-do. Implement
-  bằng filter `dueDate >= todayKey()` ở 2 lớp: `normalizeAppData()` (dọn lúc
-  app khởi động — trường hợp chính) + phòng hờ trong `renderHomeworkCard()`
-  (trường hợp app mở xuyên nửa đêm không tải lại trang). Do đó hạn nộp cũng bị
-  giới hạn chỉ chọn được từ hôm nay trở đi (giống pattern task/todo "1 lần"),
-  để tránh vừa thêm bài hạn quá khứ đã bị tự xoá ngay.
+  mới.** ⚠️ **Đã bị NỚI RỘNG thành "theo tháng" ở bản cập nhật sau cùng ngày**
+  (xem entry "⚠️ Quá hạn + thống kê tháng" ở mục "Đã hoàn thành") vì user cần
+  hiện bài quá hạn + thống kê tháng, cả 2 đều cần giữ dữ liệu qua nhiều ngày.
+  Filter đổi từ `dueDate >= todayKey()` sang `monthKeyOf(dueDate) >=
+  monthKeyOf(todayKey())`. Giữ lại đoạn dưới đây để biết lý do ban đầu (mỗi
+  bài chỉ liên quan 1 khoảng thời gian ngắn, không cần lịch sử/streak như
+  to-do) — lý do đó vẫn đúng tinh thần, chỉ đổi đơn vị thời gian áp dụng.
+  ~~Implement bằng filter `dueDate >= todayKey()` ở 2 lớp: `normalizeAppData()`
+  (dọn lúc app khởi động — trường hợp chính) + phòng hờ trong
+  `renderHomeworkCard()` (trường hợp app mở xuyên nửa đêm không tải lại
+  trang).~~ Do đó hạn nộp cũng bị giới hạn chỉ chọn được từ hôm nay trở đi
+  (giống pattern task/todo "1 lần"), để tránh vừa thêm bài hạn quá khứ đã bị
+  tự xoá ngay — **điểm này KHÔNG đổi**, vẫn giữ nguyên dù mốc dọn đã nới ra.
 - **[26/08/2026] Nhắc bài tập tái dùng 3 khung cron sẵn có, không thêm cron
   mới.** Lý do: đơn giản hoá — thay vì thêm 1 lịch cron riêng cho "12h trước
   hạn", chỉ cần thêm điều kiện `homeworkWindowAllowed` (ngày thường = chỉ khung
@@ -134,11 +200,13 @@ user)_
 
 ## Việc tồn đọng / Next steps
 
-- **Cần user xác nhận việc bỏ khung "🎯 Còn X sao nữa để nhận..." ở trang
-  Hôm nay là chủ đích** (đã bị gộp chung vào commit lần này vì đang nằm sẵn
-  uncommitted trong working tree, user chưa trả lời rõ khi được hỏi) — nếu
-  không phải chủ đích, cần khôi phục lại (xem git history quanh commit gộp
-  tab Lịch sử, hoặc file cũ có đoạn `nextRewardBox`/`.next-reward`).
+- **Thống kê tháng của Bài tập về nhà chỉ xem được THÁNG HIỆN TẠI** — do dữ
+  liệu bị dọn khi qua tháng mới (xem "Quyết định kỹ thuật"), nên qua đầu
+  tháng sau sẽ KHÔNG xem lại được số liệu tháng trước (không có kho lưu trữ
+  nhiều tháng). Nếu sau này user muốn xem lịch sử nhiều tháng, cần đổi sang
+  lưu counter tổng hợp riêng theo tháng (giống cách `todoCompleteDays` chốt
+  cứng kết quả từng ngày cho to-do) thay vì giữ nguyên item — việc lớn hơn,
+  chưa làm vì user chỉ yêu cầu "biết trong tháng" (đọc là tháng đang chạy).
 - **Cần chạy thử push bài tập về nhà bằng `workflow_dispatch`** (chọn
   `window: evening`, `force_send: true`) sau khi deploy — máy làm việc hiện
   tại không có Node cài sẵn nên chỉ rà cú pháp/logic `send-reminders.js` bằng
