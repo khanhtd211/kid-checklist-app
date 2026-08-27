@@ -600,6 +600,9 @@ function renderHomeworkPage(){
       summaryEl.style.display = 'flex';
     }
   }
+  // Cập nhật badge số trên tab "Bài tập" (và các tab khác) ngay tại đây — đảm bảo
+  // badge luôn đúng dù re-render đến từ đâu (tick/sửa/xoá/thêm bài, chuyển tab...).
+  updateTabBadges();
   if(mainList.length === 0){
     el.innerHTML = `<div class="empty-state"><span class="big">🎒</span>Chưa có bài tập nào được ghi lại.<br>Bấm "+ Thêm bài tập" để bắt đầu nhé!</div>`;
     return;
@@ -656,7 +659,6 @@ function saveHomeworkModal(){
   saveAppData();
   closeHomeworkModal();
   renderHomeworkPage();
-  updateTabBadges();
   if(justEarnedStar) celebrate();
 }
 
@@ -717,10 +719,12 @@ function updateTabBadges(){
     todayBadge.style.display = 'none';
   }
 
-  const homeworkPending = (p.homework || []).filter(h=>h.status!=='done').length;
+  const homeworkAll = p.homework || [];
+  const homeworkDone = homeworkAll.filter(h=>h.status==='done').length;
+  const homeworkTotal = homeworkAll.length;
   const homeworkBadge = document.getElementById('tabBadgeHomework');
-  if(homeworkPending > 0){
-    homeworkBadge.textContent = homeworkPending;
+  if(homeworkTotal > 0){
+    homeworkBadge.textContent = `${homeworkDone}/${homeworkTotal}`;
     homeworkBadge.style.display = 'inline-block';
   } else {
     homeworkBadge.style.display = 'none';

@@ -228,10 +228,13 @@ async function run() {
     try {
       const resp = await admin.messaging().sendEachForMulticast({
         tokens,
-        // title để chuỗi rỗng thay vì bỏ hẳn key: nếu thiếu hẳn field title, một số trình
-        // duyệt (qua firebase-messaging-compat ở sw.js) gọi showNotification(undefined,...)
-        // và hiển thị chữ "undefined" làm tiêu đề — chuỗi rỗng mới thực sự ẩn được tiêu đề.
-        notification: { title: '', body },
+        // Có title thật (không để rỗng): nếu để title:'' hoặc bỏ hẳn field, Android/
+        // Chrome coi đây là thông báo web "ẩn danh" và tự chèn thêm dòng phụ kiểu
+        // "Checklist / from Checklist" (lấy theo short_name trong manifest.json) để
+        // chống giả mạo — không tắt được dòng này bằng cách nào khác ngoài việc tự
+        // cung cấp title thật. Dùng đúng tên app (name trong manifest.json) để nếu
+        // trình duyệt có tự thêm nhãn nguồn gửi ở đâu đó thì cũng khớp, không lặp/lạ.
+        notification: { title: 'Checklist Của Con', body },
       });
       const badTokens = [];
       resp.responses.forEach((r, i) => {

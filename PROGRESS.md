@@ -5,8 +5,59 @@
 
 ## Đã hoàn thành
 
-_(tính đến 26/08/2026)_
+_(tính đến 27/08/2026)_
 
+- **[27/08/2026]** Đổi hẳn icon app (`icons/icon-192.png`, `icons/icon-512.png`,
+  `icons/apple-touch-icon.png`) sang thiết kế mới do **user tự tạo** (không
+  phải AI của Claude vẽ — sau vài vòng thử vẽ icon "cây" bằng SVG tay không ra
+  hình đẹp, đã thống nhất để user tự làm bằng công cụ khác rồi gửi file).
+  Icon mới: cây cách điệu với 2 nhánh tạo hình dáng người lớn ôm trẻ nhỏ (âm
+  bản/negative space), lá trắng-vàng-hồng, nền gradient cam-hồng — thể hiện
+  đúng tinh thần "đồng hành cùng con" thay vì chỉ "checklist công cụ". User
+  copy file gốc `icons/icon-kid-app.png` (1254×1254) vào thư mục `icons/`.
+  File gốc có viền trắng thừa quanh hình (~45-55px mỗi cạnh trên tổng
+  1254px) — dò bounding box vùng nội dung thật bằng 1 helper C# nhúng qua
+  `Add-Type` (quét pixel non-white nhanh hơn nhiều so với loop PowerShell
+  thuần), crop vuông theo đúng vùng đó rồi mới resize ra 3 kích thước cần
+  bằng .NET `System.Drawing` (`HighQualityBicubic`) — máy không có
+  Pillow/ImageMagick cài sẵn nên phải tự viết bằng .NET có sẵn trên Windows.
+  Đổi `purpose` trong `manifest.json` từ `"any maskable"` → `"any"` vì ảnh đã
+  tự bo góc riêng, không phù hợp để hệ điều hành cắt viền thêm lần nữa
+  (maskable icon cần nội dung tràn viền, không có padding sẵn). Xoá
+  `icons/icon.svg` (nguồn thiết kế icon CŨ, không dùng nữa, không ai tham
+  chiếu tới). Đã verify: fetch cả 3 file trả 200, `manifest.json` parse hợp
+  lệ, xem lại bản 192px sau khi crop — hình chiếm trọn khung, không còn viền
+  trắng thừa xung quanh.
+- **[26/08/2026]** Fix push notification hiện thêm dòng thừa **"Checklist /
+  from Checklist"** trên điện thoại thật (user báo cáo, kèm ảnh chụp thực
+  tế). Nguyên nhân: `notification.title` gửi lên đang để chuỗi rỗng `''`
+  (quyết định trước đó — xem "Quyết định kỹ thuật" cũ) khiến Android/Chrome
+  coi là thông báo web "ẩn danh", tự chèn tên app lấy từ `short_name` trong
+  `manifest.json` ("Checklist") kèm dòng "from Checklist" để chống giả mạo —
+  không tắt được bằng cách nào khác ngoài cấp title thật. Đổi
+  `title: ''` → `title: 'Checklist Của Con'` (đúng field `name` trong
+  manifest) trong `send-reminders.js`. **Chưa verify được trên thiết bị thật**
+  (không có Node/Firebase credentials ở máy làm việc) — cũng chưa chắc chắn
+  100% dòng phụ này biến mất hoàn toàn hay chỉ đổi nội dung (Android có thể
+  vẫn gắn 1 dòng tên app rất nhỏ cho MỌI thông báo web, không phân biệt có
+  title hay không — đó là hành vi chuẩn OS, không sửa được). Cần user xác
+  nhận lại sau khi nhận thông báo thật lần tới.
+- **[26/08/2026]** 3 chỉnh sửa nhỏ cho tab Bài tập theo phản hồi user:
+  (1) bỏ icon 📊 khỏi tiêu đề "Thống kê tháng này" (chỉ còn text, đỡ rối mắt);
+  (2) badge trên icon tab đổi sang dạng `X/Y` (đã xong/tổng số bài) giống
+  tab Hôm nay/To-do, thay vì chỉ hiện số bài chưa làm như trước;
+  (3) **fix bug**: badge tab không tự cập nhật khi tick/sửa/xoá bài tập ngay
+  tại trang Bài tập (phải chuyển tab qua lại mới thấy đúng số) — do
+  `updateTabBadges()` trước đó chỉ được gọi từ `renderToday()`, chưa gọi từ
+  `renderHomeworkPage()`. Đã thêm gọi trực tiếp trong `renderHomeworkPage()`
+  để mọi đường re-render (tick/thêm/sửa/xoá/chuyển tab) đều tự đồng bộ badge.
+  User báo thêm "Đã hoàn thành/Quá hạn đang tính sai — đếm số ngày thay vì số
+  bài" nhưng **đã test kỹ bằng browser với dữ liệu mô phỏng thực tế (bài quá
+  hạn 1/5 ngày, đã/chưa làm, tương lai...) và không tái hiện được** — code
+  vốn đã đếm đúng `.length` (số lượng), không có phép tính ngày nào ở 2 ô
+  thống kê này. Nghi ngờ user đang thấy bug badge ở mục (3) rồi hiểu nhầm
+  thành lỗi thống kê, hoặc điện thoại đang kẹt bản cache cũ (service worker) —
+  đã báo lại user xác nhận sau khi cập nhật bản mới, xem "Việc tồn đọng".
 - **[26/08/2026]** Card **"⚠️ Quá hạn"** + **thống kê tháng này** trong tab
   Bài tập. Đổi mốc dọn dữ liệu từ **theo NGÀY → theo THÁNG** (đây là thay đổi
   ngược lại 1 phần quyết định trước đó — xem "Quyết định kỹ thuật"): bài quá
@@ -200,6 +251,15 @@ user)_
 
 ## Việc tồn đọng / Next steps
 
+- **Cần user xác nhận trên điện thoại thật** xem push notification đã hết
+  dòng thừa "Checklist / from Checklist" chưa sau khi đổi title (xem mục
+  "Đã hoàn thành") — chưa verify được vì máy làm việc không chạy Node/gửi
+  FCM thật được.
+- **Cần user xác nhận lại sau khi cập nhật** xem "Đã hoàn thành/Quá hạn tính
+  sai (đếm ngày thay vì bài)" đã hết chưa — không tái hiện được bug này qua
+  test browser, nghi là do bug badge tab (đã fix) hoặc cache cũ trên điện
+  thoại. Nếu vẫn còn sai sau khi mở lại app, cần user chụp màn hình cụ thể để
+  soi tiếp (không thể đoán thêm nếu không thấy đúng số đang hiển thị sai).
 - **Thống kê tháng của Bài tập về nhà chỉ xem được THÁNG HIỆN TẠI** — do dữ
   liệu bị dọn khi qua tháng mới (xem "Quyết định kỹ thuật"), nên qua đầu
   tháng sau sẽ KHÔNG xem lại được số liệu tháng trước (không có kho lưu trữ
