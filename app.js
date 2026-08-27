@@ -1755,7 +1755,7 @@ function switchTab(name){
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.getElementById('page-'+name).classList.add('active');
   document.querySelectorAll('.tabbar button').forEach(b=>b.classList.toggle('active', b.dataset.tab===name));
-  document.getElementById('tabbar').style.display = (name==='picker' || name==='datamanage' || name==='history') ? 'none' : 'flex';
+  document.getElementById('tabbar').style.display = (name==='picker' || name==='datamanage' || name==='history' || name==='stats') ? 'none' : 'flex';
   if(name==='today') renderToday();
   if(name==='homework') renderHomeworkPage();
   if(name==='todo') renderTodoPage();
@@ -2170,6 +2170,8 @@ document.addEventListener('DOMContentLoaded', ()=>{
   document.getElementById('backFromDataManage').addEventListener('click', ()=> switchTab('settings'));
   document.getElementById('statsStars').addEventListener('click', ()=> switchTab('history'));
   document.getElementById('backFromHistory').addEventListener('click', ()=> switchTab('stats'));
+  document.getElementById('openStatsBtn').addEventListener('click', ()=> switchTab('stats'));
+  document.getElementById('backFromStats').addEventListener('click', ()=> switchTab('today'));
   document.getElementById('notifyEnableBtn').addEventListener('click', toggleNotificationsFlow);
 
   document.getElementById('childNameInput').addEventListener('change', (e)=>{

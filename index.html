@@ -37,6 +37,7 @@
       <button class="star-manage-btn" id="starManageBtn" title="Quản lý sao (Ba/Mẹ): Tặng / Thu hồi">
         <span class="psi-base">👪</span><span class="psi-star">⭐</span>
       </button>
+      <button class="icon-btn" id="openStatsBtn" title="Xem thống kê tuần">📈</button>
     </div>
 
     <div class="progress-wrap">
@@ -118,9 +119,10 @@
     </div>
   </div>
 
-  <!-- STATS -->
+  <!-- STATS (trang phụ, mở từ nút 📊 ở trang Hôm nay — không nằm trong tabbar) -->
   <div class="page" id="page-stats">
     <div class="topbar">
+      <button class="icon-btn" id="backFromStats">←</button>
       <div class="topbar-mid">
         <div class="greet" id="statsProfileName">Thống kê tuần này</div>
       </div>
@@ -148,7 +150,7 @@
     </div>
   </div>
 
-  <!-- HISTORY (trang phụ, mở từ nút 📜 ở trang Thống kê — không nằm trong tabbar) -->
+  <!-- HISTORY (trang phụ, mở từ nút sao ở trang Thống kê — không nằm trong tabbar) -->
   <div class="page" id="page-history">
     <div class="topbar">
       <button class="icon-btn" id="backFromHistory">←</button>
@@ -263,7 +265,6 @@
   <button data-tab="homework"><span class="icon-wrap"><span class="icon">🎒</span><span class="tab-badge homework" id="tabBadgeHomework"></span></span>Bài tập</button>
   <button data-tab="todo"><span class="icon-wrap"><span class="icon">🗒️</span><span class="tab-badge todo" id="tabBadgeTodo"></span></span>To-do</button>
   <button data-tab="voucher"><span class="icon-wrap"><span class="icon">🎫</span><span class="tab-badge voucher" id="tabBadgeVoucher"></span></span>Phiếu quà</button>
-  <button data-tab="stats"><span class="icon">📊</span>Thống kê</button>
   <button data-tab="settings"><span class="icon">⚙️</span>Cài đặt</button>
 </div>
 
