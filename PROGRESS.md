@@ -7,6 +7,17 @@
 
 _(tính đến 27/08/2026)_
 
+- **[27/08/2026]** Fix bug thật của "Đã hoàn thành" trong Thống kê tháng
+  (user báo: điện thoại có 3 bài đã làm nhưng hiển thị 1) — nguyên nhân: đếm
+  theo THÁNG CỦA HẠN NỘP thay vì tháng bé thực sự tick xong. Test đúng thời
+  điểm (27/08, gần cuối tháng) lộ rõ: bài hạn nộp rơi sang tháng 9 (VD hạn
+  01-02/09) dù đã tick xong trong tháng 8 vẫn bị loại khỏi thống kê tháng 8.
+  Sửa: đếm theo tháng của `doneAt` (thời điểm tick xong) thay vì tháng của
+  `dueDate`, fallback về `dueDate` nếu thiếu `doneAt` (dữ liệu cũ). "Quá hạn"
+  giữ nguyên đếm theo hạn nộp (không đổi — bài quá hạn tồn tại trong dữ liệu
+  chắc chắn thuộc tháng hiện tại do đã bị purge theo tháng). Đã verify bằng
+  browser test đúng kịch bản bug (3 bài đã làm, 2 bài hạn sang tháng sau) →
+  ra đúng 3, và test riêng phần "quá hạn" không bị ảnh hưởng.
 - **[27/08/2026]** Crop icon lần 2 — user test trên điện thoại thật báo vẫn
   còn dính viền trắng mỏng ở trái/phải/trên (đáy đã ổn từ lần crop trước).
   Nguyên nhân: lần crop đầu có bước "làm vuông" khung bằng cách đệm thêm ~8px
@@ -265,11 +276,6 @@ user)_
   dòng thừa "Checklist / from Checklist" chưa sau khi đổi title (xem mục
   "Đã hoàn thành") — chưa verify được vì máy làm việc không chạy Node/gửi
   FCM thật được.
-- **Cần user xác nhận lại sau khi cập nhật** xem "Đã hoàn thành/Quá hạn tính
-  sai (đếm ngày thay vì bài)" đã hết chưa — không tái hiện được bug này qua
-  test browser, nghi là do bug badge tab (đã fix) hoặc cache cũ trên điện
-  thoại. Nếu vẫn còn sai sau khi mở lại app, cần user chụp màn hình cụ thể để
-  soi tiếp (không thể đoán thêm nếu không thấy đúng số đang hiển thị sai).
 - **Thống kê tháng của Bài tập về nhà chỉ xem được THÁNG HIỆN TẠI** — do dữ
   liệu bị dọn khi qua tháng mới (xem "Quyết định kỹ thuật"), nên qua đầu
   tháng sau sẽ KHÔNG xem lại được số liệu tháng trước (không có kho lưu trữ

@@ -581,14 +581,23 @@ function renderHomeworkPage(){
     }
   }
 
-  // Thống kê tháng này: quét toàn bộ bài tập có hạn nộp trong tháng hiện tại
-  // (dữ liệu tháng trước đã bị dọn — xem purgeStaleHomework/normalizeAppData).
+  // Thống kê tháng này:
+  // - "Đã hoàn thành": đếm theo THÁNG BÉ THỰC SỰ TICK XONG (doneAt), không phải
+  //   tháng của hạn nộp — vì hạn nộp có thể rơi sang tháng sau (đặc biệt cuối
+  //   tháng) dù bé đã làm xong ngay trong tháng này, trước đây đếm nhầm theo
+  //   hạn nộp nên bị thiếu (bug user báo cáo).
+  // - "Quá hạn": vẫn đếm theo hạn nộp như cũ — bài quá hạn còn tồn tại trong
+  //   p.homework chắc chắn có hạn nộp thuộc tháng hiện tại (dữ liệu tháng
+  //   trước đã bị purgeStaleHomework/normalizeAppData dọn hết), nên không cần
+  //   lọc thêm theo tháng.
   const curMonth = monthKeyOf(todayK);
-  const monthItems = all.filter(h => monthKeyOf(h.dueDate) === curMonth);
+  const doneThisMonth = all.filter(h => h.status==='done'
+    && monthKeyOf(h.doneAt ? toKey(new Date(h.doneAt)) : h.dueDate) === curMonth).length;
+  const overdueThisMonth = all.filter(h => h.status!=='done' && h.dueDate < todayK).length;
   const statDoneEl = document.getElementById('homeworkStatDone');
   const statOverdueEl = document.getElementById('homeworkStatOverdue');
-  if(statDoneEl) statDoneEl.textContent = monthItems.filter(h=>h.status==='done').length;
-  if(statOverdueEl) statOverdueEl.textContent = monthItems.filter(h=>h.status!=='done' && h.dueDate < todayK).length;
+  if(statDoneEl) statDoneEl.textContent = doneThisMonth;
+  if(statOverdueEl) statOverdueEl.textContent = overdueThisMonth;
 
   const mainPendingCount = mainList.filter(h=>h.status!=='done').length;
   const summaryEl = document.getElementById('homeworkSummary');
