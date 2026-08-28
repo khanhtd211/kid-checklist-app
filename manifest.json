@@ -1,6 +1,6 @@
 {
   "name": "Checklist Của Con",
-  "short_name": "Checklist",
+  "short_name": "Checklist Của Con",
   "description": "Checklist hàng ngày cho con, kèm sao thưởng",
   "start_url": "./index.html",
   "display": "standalone",

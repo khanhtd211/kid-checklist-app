@@ -165,13 +165,14 @@ async function run() {
   let { dateKey, minuteOfDay, y, mo, d } = vnParts();
   let wd = weekdayOf(y, mo, d);
 
-  // GitHub Actions đôi khi trễ lịch nặng với cron */15 phút (từng xảy ra thực tế:
-  // toàn bộ khung chiều 15-17h + tối 19-20h của 1 ngày không chạy lần nào, job chỉ
-  // chạy được lúc 1h-4h sáng hôm SAU). Không khung nào trong 3 khung (10-11h/15-17h/
-  // 19-20h) rơi vào 0h-6h sáng, nên hễ job thực sự chạy trong khoảng này thì chắc
-  // chắn là chạy trễ chứ không phải lịch thật — coi đây là lần "vớt" cho HÔM QUA
-  // (dùng dữ liệu/lịch của hôm qua) thay vì lẳng lặng bỏ qua vì tưởng "chưa tới giờ"
-  // của ngày mới, tránh mất trắng cả ngày nhắc nhở như đã từng xảy ra.
+  // Lịch cron của GitHub Actions là "best-effort", đôi khi trễ nặng hoặc bị bỏ qua
+  // hẳn nhiều tiếng liền (từng xảy ra thực tế: toàn bộ khung chiều 15-17h + tối
+  // 19-20h của 1 ngày không chạy lần nào, job chỉ chạy được lúc 1h-4h sáng hôm SAU).
+  // Không khung nào trong 3 khung (10-11h/15-17h/19-20h) rơi vào 0h-6h sáng, nên hễ
+  // job thực sự chạy trong khoảng này thì chắc chắn là chạy trễ chứ không phải lịch
+  // thật — coi đây là lần "vớt" cho HÔM QUA (dùng dữ liệu/lịch của hôm qua) thay vì
+  // lẳng lặng bỏ qua vì tưởng "chưa tới giờ" của ngày mới, tránh mất trắng cả ngày
+  // nhắc nhở như đã từng xảy ra.
   let isCatchUp = false;
   if (!FORCE && minuteOfDay < 360) {
     const y0 = shiftDate(y, mo, d, -1);
@@ -255,13 +256,16 @@ async function run() {
     try {
       const resp = await admin.messaging().sendEachForMulticast({
         tokens,
-        // Có title thật (không để rỗng): nếu để title:'' hoặc bỏ hẳn field, Android/
-        // Chrome coi đây là thông báo web "ẩn danh" và tự chèn thêm dòng phụ kiểu
-        // "Checklist / from Checklist" (lấy theo short_name trong manifest.json) để
-        // chống giả mạo — không tắt được dòng này bằng cách nào khác ngoài việc tự
-        // cung cấp title thật. Dùng đúng tên app (name trong manifest.json) để nếu
-        // trình duyệt có tự thêm nhãn nguồn gửi ở đâu đó thì cũng khớp, không lặp/lạ.
-        notification: { title: 'Checklist Của Con', body },
+        // title để chuỗi rỗng (không phải bỏ hẳn field — bỏ hẳn field mới gây lỗi
+        // hiện chữ "undefined" trên 1 số trình duyệt do firebase-messaging-compat ở
+        // sw.js gọi showNotification(undefined,...); chuỗi rỗng thì không sao).
+        // ĐÃ THỬ đặt title thật ('Checklist Của Con') nhưng Android/Chrome vẫn cứ tự
+        // chèn thêm dòng "from <short_name>" bên dưới (cơ chế chống giả mạo cho web
+        // push, không tắt được bằng bất kỳ field nào trong payload) — kết quả là hiện
+        // LẶP 2 dòng (title tự đặt + dòng Chrome tự thêm). Do đó bỏ hẳn title tự đặt,
+        // chỉ đổi short_name trong manifest.json thành "Checklist Của Con" để dòng
+        // Chrome tự chèn ("from ...") đọc đúng luôn, không cần thêm title riêng nữa.
+        notification: { title: '', body },
       });
       const badTokens = [];
       resp.responses.forEach((r, i) => {
