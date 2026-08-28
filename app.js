@@ -246,7 +246,15 @@ function todoScheduleLabel(t){
 function todosForDate(d){
   const wd = weekdayOf(d);
   const key = toKey(d);
-  return activeProfile().todos.filter(t => t.onceDate ? t.onceDate === key : (t.days||[]).includes(wd));
+  return activeProfile().todos.filter(t => {
+    // Việc to-do mới thêm chỉ áp dụng TỪ ngày được thêm trở đi, không tính ngược về
+    // quá khứ — nếu không, các ngày cũ (trước khi việc này tồn tại) sẽ bị coi là
+    // "chưa xong hết" một cách sai lệch (vì chưa có log cho việc mới), làm giảm
+    // sai chuỗi ngày/huy hiệu đã đạt được. Việc cũ không có createdAt (tạo trước
+    // khi có field này) thì không lọc, giữ nguyên hành vi áp dụng mọi ngày như cũ.
+    if(t.createdAt && toKey(new Date(t.createdAt)) > key) return false;
+    return t.onceDate ? t.onceDate === key : (t.days||[]).includes(wd);
+  });
 }
 function isTodoDone(dateKey, todoId){
   const p = activeProfile();
@@ -1639,7 +1647,9 @@ function saveTodoModal(){
     t.title = title; t.emoji = emoji; t.days = days;
     if(onceDate) t.onceDate = onceDate; else delete t.onceDate;
   } else {
-    const newTodo = { id: uid(), title, emoji, days };
+    // createdAt: mốc để todosForDate() không áp dụng việc này ngược về quá khứ
+    // (trước ngày tạo) — xem giải thích ở todosForDate().
+    const newTodo = { id: uid(), title, emoji, days, createdAt: Date.now() };
     if(onceDate) newTodo.onceDate = onceDate;
     p.todos.push(newTodo);
   }
