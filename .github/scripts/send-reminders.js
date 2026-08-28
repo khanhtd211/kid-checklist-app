@@ -56,6 +56,15 @@ function weekdayOf(y, mo, d) {
   return new Date(Date.UTC(y, mo - 1, d)).getUTCDay();
 }
 
+function pad2(n) { return String(n).padStart(2, '0'); }
+function toDateKey(y, mo, d) { return `${y}-${pad2(mo)}-${pad2(d)}`; }
+// Lùi lại deltaDays ngày (âm = lùi về quá khứ), trả về {y, mo, d}.
+function shiftDate(y, mo, d, deltaDays) {
+  const dt = new Date(Date.UTC(y, mo - 1, d));
+  dt.setUTCDate(dt.getUTCDate() + deltaDays);
+  return { y: dt.getUTCFullYear(), mo: dt.getUTCMonth() + 1, d: dt.getUTCDate() };
+}
+
 // Số ngày từ dateKeyA đến dateKeyB (B - A), cả 2 dạng 'YYYY-MM-DD'.
 function daysBetween(dateKeyA, dateKeyB) {
   const [ay, am, ad] = dateKeyA.split('-').map(Number);
@@ -153,8 +162,26 @@ function buildMixedBody(statuses) {
 }
 
 async function run() {
-  const { dateKey, minuteOfDay, y, mo, d } = vnParts();
-  const wd = weekdayOf(y, mo, d);
+  let { dateKey, minuteOfDay, y, mo, d } = vnParts();
+  let wd = weekdayOf(y, mo, d);
+
+  // GitHub Actions đôi khi trễ lịch nặng với cron */15 phút (từng xảy ra thực tế:
+  // toàn bộ khung chiều 15-17h + tối 19-20h của 1 ngày không chạy lần nào, job chỉ
+  // chạy được lúc 1h-4h sáng hôm SAU). Không khung nào trong 3 khung (10-11h/15-17h/
+  // 19-20h) rơi vào 0h-6h sáng, nên hễ job thực sự chạy trong khoảng này thì chắc
+  // chắn là chạy trễ chứ không phải lịch thật — coi đây là lần "vớt" cho HÔM QUA
+  // (dùng dữ liệu/lịch của hôm qua) thay vì lẳng lặng bỏ qua vì tưởng "chưa tới giờ"
+  // của ngày mới, tránh mất trắng cả ngày nhắc nhở như đã từng xảy ra.
+  let isCatchUp = false;
+  if (!FORCE && minuteOfDay < 360) {
+    const y0 = shiftDate(y, mo, d, -1);
+    y = y0.y; mo = y0.mo; d = y0.d;
+    dateKey = toDateKey(y, mo, d);
+    wd = weekdayOf(y, mo, d);
+    minuteOfDay = 24 * 60; // ép qua mốc "đã tới giờ" của mọi khung trong ngày hôm qua
+    isCatchUp = true;
+  }
+
   const win = WINDOWS[WINDOW];
 
   const isWeekend = (wd === 0 || wd === 6);
@@ -253,7 +280,7 @@ async function run() {
     }
   }
 
-  console.log(`[${WINDOW}${FORCE ? ' (FORCE test)' : ''}] Đã gửi: ${sentCount} (bài tập: ${homeworkSentCount}), bỏ qua (chiều đã xong hết): ${skippedAllDone}, chưa tới giờ: ${tooEarly}, đã gửi từ trước: ${alreadySent}`);
+  console.log(`[${WINDOW}${FORCE ? ' (FORCE test)' : ''}${isCatchUp ? ' (CATCH-UP cho ' + dateKey + ')' : ''}] Đã gửi: ${sentCount} (bài tập: ${homeworkSentCount}), bỏ qua (chiều đã xong hết): ${skippedAllDone}, chưa tới giờ: ${tooEarly}, đã gửi từ trước: ${alreadySent}`);
 }
 
 run().catch(e => { console.error(e); process.exit(1); });
