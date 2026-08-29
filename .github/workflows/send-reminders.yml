@@ -1,20 +1,13 @@
 name: Gửi thông báo nhắc nhở checklist
 
 on:
-  schedule:
-    # Lịch cron của GitHub Actions là "best-effort", KHÔNG đảm bảo chạy đúng giờ —
-    # theo tài liệu chính thức, lịch càng dày (đặc biệt đúng đầu giờ :00) càng dễ bị
-    # trì hoãn/bỏ qua vào giờ cao điểm. Từng gặp thực tế: cron */15 phút bị bỏ lỡ
-    # HOÀN TOÀN nhiều tiếng liền (xem PROGRESS.md). Giảm còn mỗi 30 phút và lệch khỏi
-    # đúng đầu giờ (phút :05/:35 thay vì :00/:15/:30/:45) để giảm rủi ro bị rớt lịch.
-    #
-    # Sáng cuối tuần: khung 10h-11h giờ VN, CHỈ thứ 7 (6) & chủ nhật (0)
-    # (03:00-04:45 UTC). VN = UTC+7 nên không lệch ngày.
-    - cron: '5,35 3-4 * * 0,6'
-    # Buổi chiều: khung 15h-17h giờ VN (08:00-09:45 UTC)
-    - cron: '5,35 8-9 * * *'
-    # Buổi tối: khung 19h-20h giờ VN (12:00-12:45 UTC)
-    - cron: '5,35 12 * * *'
+  # KHÔNG dùng schedule: (lịch cron nội bộ của GitHub Actions) nữa — đã xác nhận
+  # thực tế nhiều lần bị GitHub âm thầm bỏ qua hàng chục tiếng liền dù workflow ở
+  # trạng thái active (xem PROGRESS.md). Thay bằng dịch vụ cron ngoài (cron-job.org)
+  # gọi API workflow_dispatch dưới đây theo đúng giờ thật, đáng tin cậy hơn hẳn.
+  # Mỗi khung giờ có nhiều lần gọi rải rác (mỗi 15 phút) từ cron-job.org, script
+  # bên dưới tự chọn 1 thời điểm ngẫu nhiên trong khung để gửi — giữ đúng cảm giác
+  # "bất ngờ" như thiết kế ban đầu, chỉ đổi nguồn trigger cho đáng tin cậy hơn.
   workflow_dispatch:
     inputs:
       window:
@@ -46,23 +39,10 @@ jobs:
         working-directory: .github/scripts
         run: npm install
 
-      - name: Xác định khung giờ đang chạy
-        id: pickwindow
-        run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "window=${{ github.event.inputs.window }}" >> "$GITHUB_OUTPUT"
-          elif [ "${{ github.event.schedule }}" = "5,35 3-4 * * 0,6" ]; then
-            echo "window=weekend_morning" >> "$GITHUB_OUTPUT"
-          elif [ "${{ github.event.schedule }}" = "5,35 8-9 * * *" ]; then
-            echo "window=afternoon" >> "$GITHUB_OUTPUT"
-          else
-            echo "window=evening" >> "$GITHUB_OUTPUT"
-          fi
-
       - name: Gửi thông báo
         working-directory: .github/scripts
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
-          NOTIFY_WINDOW: ${{ steps.pickwindow.outputs.window }}
+          NOTIFY_WINDOW: ${{ github.event.inputs.window }}
           FORCE_SEND: ${{ github.event.inputs.force_send }}
         run: node send-reminders.js
