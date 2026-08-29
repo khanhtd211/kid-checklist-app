@@ -396,31 +396,43 @@ function removeCompleteStarHistory(p, dateKey){
   if(idx > -1) p.starHistory.splice(idx, 1);
 }
 
-function toggleTask(taskId){
+// Đối chiếu lại sao của HÔM NAY với tình trạng "đã xong hết việc" HIỆN TẠI —
+// dùng cho cả lúc bé tick/bỏ tick VÀ lúc Bố/Mẹ sửa danh sách việc (thêm/sửa/xoá)
+// trong Cài đặt. Trước đây chỉ toggleTask() mới kiểm tra lại, nên có kẽ hở: bé
+// tự sửa lịch 1 việc để bớt số việc hôm nay, tick hết, được cộng sao — sau đó
+// Bố/Mẹ phát hiện và sửa lại lịch như cũ (KHÔNG qua toggleTask), sao đã cộng sai
+// vẫn còn nguyên vì không có gì đối chiếu lại. Gọi hàm này sau mỗi thay đổi có
+// thể ảnh hưởng tới việc "đã xong hết chưa" để tự thu hồi/cộng lại cho đúng.
+// Trả về 'awarded' | 'revoked' | null.
+function reconcileTodayStar(){
   const p = activeProfile();
   const key = todayKey();
-  const wasDone = isDone(key, taskId);
-  setDone(key, taskId, !wasDone);
   const { done, total } = progressFor(todayDate());
   const hadStarBefore = !!p.starDays[key];
-  if(total > 0 && done === total && !hadStarBefore){
+  const nowComplete = total > 0 && done === total;
+  if(nowComplete && !hadStarBefore){
     p.starDays[key] = true;
     p.stars += 1;
     addStarHistory(p, { type:'complete', dateKey:key, amount:1, reason:'Hoàn thành hết việc trong ngày', emoji:'✅' });
-    saveAppData();
-    renderAll();
-    celebrate();
-  } else if(hadStarBefore && !(total>0 && done===total)){
-    // un-did a task after already earning the star today -> revoke
+    return 'awarded';
+  }
+  if(hadStarBefore && !nowComplete){
     delete p.starDays[key];
     p.stars = Math.max(0, p.stars - 1);
     removeCompleteStarHistory(p, key);
-    saveAppData();
-    renderAll();
-  } else {
-    saveAppData();
-    renderAll();
+    return 'revoked';
   }
+  return null;
+}
+
+function toggleTask(taskId){
+  const key = todayKey();
+  const wasDone = isDone(key, taskId);
+  setDone(key, taskId, !wasDone);
+  const result = reconcileTodayStar();
+  saveAppData();
+  renderAll();
+  if(result === 'awarded') celebrate();
 }
 
 // Tự động tick các việc trong checklist chính có icon HOMEWORK_LINK_EMOJI (🎒) —
@@ -471,6 +483,14 @@ function celebrateGift(p, amount, emoji, reason){
 function celebrateDeduct(p, amount, emoji, reason){
   const html = `${emoji} ${escapeHtml(p.name)} bị thu hồi <b>${amount} ⭐</b>.<br>Lý do: <b>${escapeHtml(reason)}</b><br><b>Còn lại: ${p.stars} sao</b>`;
   showNotifyModal({ icon:'📋', title:'Đã ghi nhận', html, confetti:false });
+}
+// Thông báo cho Bố/Mẹ khi sửa/xoá việc trong Cài đặt làm mất hiệu lực 1 sao đã
+// cộng trước đó (xem reconcileTodayStar()) — để không bị bất ngờ khi thấy tổng
+// số sao tự giảm mà không rõ lý do.
+function notifyStarRevoked(){
+  const p = activeProfile();
+  const html = `Sau khi cập nhật danh sách việc, ${escapeHtml(p.name)} chưa hoàn thành hết việc hôm nay nữa — sao đã cộng trước đó (theo lịch cũ) đã được thu hồi lại.<br><span style="font-size:13px;color:var(--muted)">Còn lại: ${p.stars} sao</span>`;
+  showNotifyModal({ icon:'⚠️', title:'Đã thu hồi 1 sao', html, confetti:false });
 }
 function celebrateRedeem(p, r){
   const html = `${r.emoji} ${escapeHtml(p.name)} đã đổi <b>${r.threshold} ⭐</b> lấy phiếu <b>${escapeHtml(r.title)}</b>!<br><span style="font-size:13px;color:var(--muted)">Phiếu đã lưu vào tab 🎫 Phiếu quà, dùng khi nào cũng được.<br>Còn lại: ${p.stars} sao</span>`;
@@ -1054,7 +1074,10 @@ function deleteTask(id){
   if(!confirm('Xoá việc này?')) return;
   const p = activeProfile();
   p.tasks = p.tasks.filter(t=>t.id!==id);
+  const result = reconcileTodayStar();
   saveAppData(); renderAll();
+  if(result === 'awarded') celebrate();
+  else if(result === 'revoked') notifyStarRevoked();
 }
 function deleteReward(id){
   if(!confirm('Xoá mốc thưởng này?')) return;
@@ -1595,9 +1618,14 @@ function saveTaskModal(){
     if(onceDate) newTask.onceDate = onceDate;
     p.tasks.push(newTask);
   }
+  // Sửa/thêm việc có thể làm thay đổi tổng số việc hôm nay -> đối chiếu lại xem
+  // sao đã cộng có còn hợp lệ không (xem giải thích ở reconcileTodayStar()).
+  const result = reconcileTodayStar();
   saveAppData();
   closeTaskModal();
   renderAll();
+  if(result === 'awarded') celebrate();
+  else if(result === 'revoked') notifyStarRevoked();
 }
 
 /* ---------- Todo modal (không bắt buộc) ---------- */
