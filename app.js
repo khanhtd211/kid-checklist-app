@@ -186,6 +186,19 @@ if(typeof appData.parentPin === 'undefined') appData.parentPin = null;
 
 let appData = loadAppData();
 normalizeAppData();
+// Đối chiếu lại sao hôm nay ngay khi mở app — bắt các trường hợp dữ liệu bị cộng/
+// thu hồi sai sao từ TRƯỚC khi có reconcileTodayStar() (VD: bé lách lịch việc rồi
+// Bố/Mẹ sửa lại nhưng chưa có gì tick/sửa thêm để tự đối chiếu). Chỉ sửa dữ liệu ở
+// đây (an toàn gọi trước khi DOM sẵn sàng) — phần hiện thông báo (nếu có thay đổi)
+// để dành tới khi DOMContentLoaded xong mới hiện modal.
+const startupStarReconcileResult = reconcileTodayStar();
+// Lưu trực tiếp bằng localStorage (KHÔNG gọi saveAppData()) — saveAppData() còn
+// gọi getSyncCode(), phụ thuộc hằng số SYNC_CODE_KEY khai báo ở cuối file (phần
+// đồng bộ Firebase), lúc này CHƯA được khởi tạo (script mới chạy tới đây) nên sẽ
+// crash "Cannot access before initialization", làm hỏng toàn bộ phần chạy sau đó
+// (kể cả DOMContentLoaded không được đăng ký, app không hiện được gì). Đồng bộ
+// lên mây (nếu có bật) sẽ tự chạy ở lần saveAppData() kế tiếp bình thường.
+if(startupStarReconcileResult) localStorage.setItem(STORAGE_KEY, JSON.stringify(appData));
 
 function getProfile(id){ return appData.profiles.find(p=>p.id===id); }
 function activeProfile(){ return getProfile(appData.activeProfileId) || appData.profiles[0]; }
@@ -1748,8 +1761,14 @@ function renderPicker(){
   grid.querySelectorAll('.profile-tile-main').forEach(btn=>{
     btn.addEventListener('click', ()=>{
       appData.activeProfileId = btn.dataset.id;
+      // Đối chiếu lại sao hôm nay của bé này ngay khi chuyển qua — bắt các trường
+      // hợp dữ liệu bị sai từ trước (xem reconcileTodayStar()) mà chưa có dịp
+      // tick/sửa gì để tự đối chiếu lại.
+      const result = reconcileTodayStar();
       saveAppData();
       switchTab('today');
+      if(result === 'awarded') celebrate();
+      else if(result === 'revoked') notifyStarRevoked();
     });
   });
   grid.querySelectorAll('.profile-edit-btn').forEach(btn=>{
@@ -2210,6 +2229,11 @@ if(getSyncCode() && initFirebase()){
 
 document.addEventListener('DOMContentLoaded', ()=>{
   renderToday();
+
+  // Hiện thông báo (nếu có) cho lần đối chiếu sao lúc mở app ở trên — để dành tới
+  // đây vì lúc đó DOM (modal) chưa sẵn sàng.
+  if(startupStarReconcileResult === 'awarded') celebrate();
+  else if(startupStarReconcileResult === 'revoked') notifyStarRevoked();
 
   document.querySelectorAll('.tabbar button').forEach(b=>{
     b.addEventListener('click', ()=> switchTab(b.dataset.tab));
