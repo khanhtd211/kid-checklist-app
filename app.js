@@ -398,7 +398,12 @@ function renderTodoBadges(p, streak){
 
   const hintEl = document.getElementById('todoBadgeHint');
   if(hintEl){
-    const next = TODO_STREAK_BADGES.find(b => !earned.includes(b.days));
+    // Cố ý tính mốc kế tiếp theo STREAK HIỆN TẠI (không phải theo p.todoBadges đã
+    // mở khoá vĩnh viễn) — huy hiệu là thành tích giữ mãi mãi, nhưng lời động viên
+    // phải phản ánh đúng tiến độ streak thật. Nếu không, streak bị đứt về 0 sau khi
+    // đã từng đạt mốc 7/14 ngày sẽ khiến hint nhảy thẳng lên mốc kế tiếp CHƯA từng
+    // đạt (VD 14 ngày) thay vì quay về đúng mốc thấp nhất (3 ngày) như streak thật.
+    const next = TODO_STREAK_BADGES.find(b => streak < b.days);
     if(next){
       const remain = next.days - streak;
       hintEl.textContent = remain > 0
