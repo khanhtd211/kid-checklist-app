@@ -198,10 +198,24 @@ async function run() {
     const tokens = Array.isArray(data.notifyTokens) ? data.notifyTokens : [];
     if (!tokens.length) continue;
 
-    console.log('DEBUG raw notifySchedule for', doc.id, '=', JSON.stringify(data.notifySchedule), '| computed dateKey=', dateKey, 'wd=', wd, 'minuteOfDay=', minuteOfDay, 'isCatchUp=', isCatchUp, 'isWeekend=', isWeekend);
     let schedule = data.notifySchedule;
     if (!schedule || schedule.dateKey !== dateKey) {
-      schedule = { dateKey };
+      // Sang ngày mới: PHẢI xoá tường minh các khung khác + homeworkSent còn sót
+      // lại từ hôm qua bằng FieldValue.delete(), không thể chỉ gán `schedule =
+      // {dateKey}` rồi ghi bằng set(...,{merge:true}) như trước — Firestore
+      // merge:true merge SÂU vào field dạng map, nên khung nào không được nhắc
+      // tới trong lần ghi đó vẫn "sống sót" nguyên trạng thái (kể cả sent:true)
+      // từ hôm qua. Bug thật đã xảy ra: cuối tuần (cả 3 khung cùng chạy 1 ngày),
+      // sang ngày cuối tuần kế tiếp, khung đầu tiên trong ngày (weekend_morning)
+      // "reset" xong vẫn để lọt sent:true cũ của afternoon/evening từ hôm qua,
+      // khiến 2 khung đó tưởng "đã gửi rồi" ngay từ lần kiểm tra đầu tiên trong
+      // ngày mới và bỏ qua luôn — chỉ 1/3 thông báo/ngày được gửi thay vì cả 3.
+      const deletions = { dateKey };
+      ['weekend_morning', 'afternoon', 'evening'].forEach(k => {
+        if (k !== WINDOW) deletions[k] = admin.firestore.FieldValue.delete();
+      });
+      deletions.homeworkSent = admin.firestore.FieldValue.delete();
+      schedule = deletions;
     }
     // Khởi tạo riêng từng slot nếu thiếu (thay vì tạo cả 3 cùng lúc) — tránh lỗi
     // "slot undefined" cho gia đình có notifySchedule hôm nay được tạo trước khi
