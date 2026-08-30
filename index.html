@@ -210,8 +210,8 @@
 
     <div class="card">
       <div class="section-title">🌴 Ngày nghỉ (không cần checklist/to-do, không tính sao)</div>
-      <div id="settingsDayOffList"></div>
-      <button class="add-btn" id="addDayOffBtn" style="background:#f5a623">+ Đánh dấu ngày nghỉ</button>
+      <p class="modal-hint" id="dayOffSummary" style="margin:0 0 12px">Chưa có ngày nghỉ nào được đánh dấu.</p>
+      <button class="add-btn" id="manageDayOffBtn" style="background:#f5a623">🗓️ Quản lý ngày nghỉ</button>
     </div>
 
     <div class="card">
@@ -389,6 +389,25 @@
     <div class="month-cal-grid" id="datePickerGrid"></div>
     <div class="sheet-actions">
       <button class="btn-secondary" id="datePickerCancelBtn" style="flex:1">Huỷ</button>
+    </div>
+  </div>
+</div>
+
+<!-- Ngày nghỉ: lịch tháng, bấm 1 ngày để đánh dấu/bỏ đánh dấu (đã xác nhận PIN
+     trước khi mở modal này, không cần nhập lại PIN mỗi lần bấm 1 ngày) -->
+<div class="overlay" id="dayOffCalModal">
+  <div class="sheet">
+    <h3>🌴 Ngày nghỉ</h3>
+    <div class="date-picker-head">
+      <button type="button" class="icon-btn" id="dayOffCalPrevBtn">‹</button>
+      <div class="date-picker-title" id="dayOffCalTitle"></div>
+      <button type="button" class="icon-btn" id="dayOffCalNextBtn">›</button>
+    </div>
+    <div class="month-cal-head" id="dayOffCalHead"></div>
+    <div class="month-cal-grid" id="dayOffCalGrid"></div>
+    <p class="modal-hint">Bấm vào 1 ngày để đánh dấu/bỏ đánh dấu ngày nghỉ.</p>
+    <div class="sheet-actions">
+      <button class="btn-primary" id="dayOffCalCloseBtn" style="flex:1">Đóng</button>
     </div>
   </div>
 </div>

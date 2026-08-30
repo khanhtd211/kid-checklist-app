@@ -1129,20 +1129,14 @@ function renderSettings(){
     </div>
   `).join('') || `<div class="empty-state">Chưa có mốc thưởng nào.</div>`;
 
-  const dayOffListEl = document.getElementById('settingsDayOffList');
-  if(dayOffListEl){
-    const dates = Object.keys(p.dayOffDates || {}).sort();
-    dayOffListEl.innerHTML = dates.length
-      ? dates.map(k=>`
-        <div class="list-item">
-          <div class="emoji">🌴</div>
-          <div class="info">
-            <div class="t">${fmtHuman(dateFromKey(k))}</div>
-          </div>
-          <button class="icon-btn danger" onclick="requestRemoveDayOff('${k}')">🗑️</button>
-        </div>
-      `).join('')
-      : `<div class="empty-state">Chưa có ngày nghỉ nào được đánh dấu.</div>`;
+  // Ngày nghỉ: chỉ hiện tóm tắt số ngày đã đánh dấu (xem qua lịch tháng ở
+  // dayOffCalModal) — không liệt kê từng dòng, tránh phình dài theo thời gian.
+  const dayOffSummaryEl = document.getElementById('dayOffSummary');
+  if(dayOffSummaryEl){
+    const count = Object.keys(p.dayOffDates || {}).length;
+    dayOffSummaryEl.textContent = count > 0
+      ? `Đã đánh dấu ${count} ngày nghỉ. Bấm nút bên dưới để xem/sửa trên lịch.`
+      : 'Chưa có ngày nghỉ nào được đánh dấu.';
   }
 
   const pinBtn = document.getElementById('managePinBtn');
@@ -1171,18 +1165,70 @@ function addDayOffDate(dateKey){
   saveAppData();
   renderAll();
 }
-function requestAddDayOff(){
-  const proceed = ()=> openDatePicker(todayKey(), null, (key)=> addDayOffDate(key));
+function removeDayOffDate(dateKey){
+  const p = activeProfile();
+  if(p.dayOffDates) delete p.dayOffDates[dateKey];
+  saveAppData();
+  renderAll();
+}
+
+// Mở lịch quản lý ngày nghỉ: xác nhận PIN 1 LẦN để mở, sau đó bấm trực tiếp
+// từng ngày trên lịch để đánh dấu/bỏ đánh dấu (không cần nhập lại PIN mỗi ngày) —
+// dùng cho việc đánh dấu nhiều ngày liền (VD cả tuần nghỉ Tết) đỡ mất công.
+function requestManageDayOff(){
+  const proceed = ()=> openDayOffCalModal();
   if(!appData.parentPin){ openPinSetupModal(proceed); } else { openPinVerifyModal(proceed); }
 }
-function requestRemoveDayOff(dateKey){
-  const proceed = ()=>{
-    const p = activeProfile();
-    if(p.dayOffDates) delete p.dayOffDates[dateKey];
-    saveAppData();
-    renderAll();
-  };
-  if(!appData.parentPin){ openPinSetupModal(proceed); } else { openPinVerifyModal(proceed); }
+
+let dayOffCalViewYear, dayOffCalViewMonth;
+function openDayOffCalModal(){
+  const today = todayDate();
+  dayOffCalViewYear = today.getFullYear();
+  dayOffCalViewMonth = today.getMonth();
+  renderDayOffCalGrid();
+  document.getElementById('dayOffCalModal').classList.add('open');
+}
+function closeDayOffCalModal(){
+  document.getElementById('dayOffCalModal').classList.remove('open');
+  renderSettings(); // cập nhật lại dòng tóm tắt số ngày nghỉ
+  renderAll();       // phòng khi ngày vừa bấm là hôm nay/liên quan streak đang hiện
+}
+function shiftDayOffCalMonth(delta){
+  dayOffCalViewMonth += delta;
+  if(dayOffCalViewMonth < 0){ dayOffCalViewMonth = 11; dayOffCalViewYear--; }
+  else if(dayOffCalViewMonth > 11){ dayOffCalViewMonth = 0; dayOffCalViewYear++; }
+  renderDayOffCalGrid();
+}
+function renderDayOffCalGrid(){
+  document.getElementById('dayOffCalTitle').textContent = `Tháng ${dayOffCalViewMonth + 1}/${dayOffCalViewYear}`;
+  document.getElementById('dayOffCalHead').innerHTML = ['T2','T3','T4','T5','T6','T7','CN'].map(l=>`<div>${l}</div>`).join('');
+
+  const firstOfMonth = new Date(dayOffCalViewYear, dayOffCalViewMonth, 1);
+  const daysInMonth = new Date(dayOffCalViewYear, dayOffCalViewMonth + 1, 0).getDate();
+  const wdFirst = weekdayOf(firstOfMonth);
+  const leadingBlanks = (wdFirst + 6) % 7;
+
+  const cells = [];
+  for(let i=0; i<leadingBlanks; i++) cells.push(null);
+  for(let day=1; day<=daysInMonth; day++) cells.push(new Date(dayOffCalViewYear, dayOffCalViewMonth, day));
+
+  const todayKey_ = todayKey();
+  const gridEl = document.getElementById('dayOffCalGrid');
+  gridEl.innerHTML = cells.map(d=>{
+    if(!d) return `<div class="month-cal-cell empty"></div>`;
+    const key = toKey(d);
+    const off = isDayOff(key);
+    const isToday = key === todayKey_;
+    const cls = 'month-cal-cell' + (isToday ? ' today' : '') + (off ? ' dayoff' : '');
+    return `<div class="${cls}" data-key="${key}" title="${off ? 'Bấm để bỏ đánh dấu' : 'Bấm để đánh dấu ngày nghỉ'}">${off ? '🌴' : d.getDate()}</div>`;
+  }).join('');
+  gridEl.querySelectorAll('[data-key]').forEach(cell=>{
+    cell.addEventListener('click', ()=>{
+      const key = cell.dataset.key;
+      if(isDayOff(key)) removeDayOffDate(key); else addDayOffDate(key);
+      renderDayOffCalGrid();
+    });
+  });
 }
 
 function deleteTask(id){
@@ -2431,9 +2477,11 @@ document.addEventListener('DOMContentLoaded', ()=>{
     }
   });
 
-  // Ngày nghỉ (Bố/Mẹ) — đánh dấu 1 ngày không cần checklist/to-do, không tính sao,
-  // yêu cầu mã PIN
-  document.getElementById('addDayOffBtn').addEventListener('click', requestAddDayOff);
+  // Ngày nghỉ (Bố/Mẹ) — quản lý qua lịch tháng, yêu cầu mã PIN để mở
+  document.getElementById('manageDayOffBtn').addEventListener('click', requestManageDayOff);
+  document.getElementById('dayOffCalCloseBtn').addEventListener('click', closeDayOffCalModal);
+  document.getElementById('dayOffCalPrevBtn').addEventListener('click', ()=> shiftDayOffCalMonth(-1));
+  document.getElementById('dayOffCalNextBtn').addEventListener('click', ()=> shiftDayOffCalMonth(1));
 
   // Sao lưu dữ liệu: xuất không cần PIN (chỉ đọc), nhập cần PIN vì sẽ ghi đè toàn bộ data
   document.getElementById('exportDataBtn').addEventListener('click', exportData);
