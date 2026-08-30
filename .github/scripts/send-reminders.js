@@ -198,6 +198,7 @@ async function run() {
     const tokens = Array.isArray(data.notifyTokens) ? data.notifyTokens : [];
     if (!tokens.length) continue;
 
+    console.log('DEBUG raw notifySchedule for', doc.id, '=', JSON.stringify(data.notifySchedule), '| computed dateKey=', dateKey, 'wd=', wd, 'minuteOfDay=', minuteOfDay, 'isCatchUp=', isCatchUp, 'isWeekend=', isWeekend);
     let schedule = data.notifySchedule;
     if (!schedule || schedule.dateKey !== dateKey) {
       schedule = { dateKey };
