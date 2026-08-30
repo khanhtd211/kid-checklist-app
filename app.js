@@ -1178,16 +1178,6 @@ function renderSettings(){
     </div>
   `).join('') || `<div class="empty-state">Chưa có mốc thưởng nào.</div>`;
 
-  // Ngày nghỉ: chỉ hiện tóm tắt số ngày đã đánh dấu (xem qua lịch tháng ở
-  // dayOffCalModal) — không liệt kê từng dòng, tránh phình dài theo thời gian.
-  const dayOffSummaryEl = document.getElementById('dayOffSummary');
-  if(dayOffSummaryEl){
-    const count = Object.keys(p.dayOffDates || {}).length;
-    dayOffSummaryEl.textContent = count > 0
-      ? `Đã đánh dấu ${count} ngày nghỉ. Bấm nút bên dưới để xem/sửa trên lịch.`
-      : 'Chưa có ngày nghỉ nào được đánh dấu.';
-  }
-
   const pinBtn = document.getElementById('managePinBtn');
   if(pinBtn){
     pinBtn.textContent = appData.parentPin ? '🔒' : '🔓';
@@ -1239,8 +1229,7 @@ function openDayOffCalModal(){
 }
 function closeDayOffCalModal(){
   document.getElementById('dayOffCalModal').classList.remove('open');
-  renderSettings(); // cập nhật lại dòng tóm tắt số ngày nghỉ
-  renderAll();       // phòng khi ngày vừa bấm là hôm nay/liên quan streak đang hiện
+  renderAll(); // phòng khi ngày vừa bấm là hôm nay/liên quan streak đang hiện (renderAll tự gọi lại renderSettings nếu đang ở trang Cài đặt)
 }
 function shiftDayOffCalMonth(delta){
   dayOffCalViewMonth += delta;
