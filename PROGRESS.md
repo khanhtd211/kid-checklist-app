@@ -5,8 +5,77 @@
 
 ## Đã hoàn thành
 
-_(tính đến 27/08/2026)_
+_(tính đến 30/08/2026)_
 
+- **[30/08/2026]** Tính năng mới **"🌴 Ngày nghỉ"**: Bố/Mẹ đánh dấu 1 ngày là
+  ngày nghỉ (cần mã PIN) qua modal lịch tháng ở Cài đặt — xác nhận PIN 1 LẦN
+  để mở, sau đó bấm trực tiếp từng ngày để đánh dấu/bỏ đánh dấu (không cần
+  nhập lại PIN mỗi ngày, tiện đánh dấu cả cụm ngày liền như tuần nghỉ Tết).
+  Ngày được đánh dấu: checklist/to-do không tick được, không cộng/trừ sao
+  (nếu lỡ đã tick xong & có sao trước đó thì tự thu hồi ngay lúc đánh dấu),
+  streak to-do giữ nguyên không tăng không giảm (tái dùng cơ chế `null` sẵn
+  có của `isTodoDayComplete()` cho "ngày không có to-do nào" — không phát
+  sinh field mới). Trải qua vài vòng chỉnh theo phản hồi user ngay trong
+  phiên: bản đầu liệt kê ngày nghỉ dạng list từng dòng ở Cài đặt → đổi hẳn
+  sang lịch tháng (`dayOffCalModal`) vì list sẽ phình rất dài theo thời gian;
+  câu thông báo "Hôm nay là ngày nghỉ" ban đầu cố định 1 câu + dùng icon 🌴
+  lặp lại tới 3 chỗ cùng lúc trên 1 màn hình (badge tab, cạnh label, icon
+  giữa trang) → đổi thành 8 câu động viên/trang (`DAYOFF_TASK_MESSAGES`,
+  `DAYOFF_TODO_MESSAGES`), mỗi câu có icon riêng phù hợp nội dung, gọi đúng
+  tên thật của bé qua placeholder `{name}`, và chọn CỐ ĐỊNH theo
+  hash(ngày) (`pickDayOffMessage()`) thay vì random thật mỗi lần render —
+  để cùng 1 ngày luôn ra đúng 1 câu, tránh đổi câu liên tục trong ngày làm
+  cạn kho câu nhanh; chỉ còn giữ 🌴 duy nhất ở badge trạng thái tabbar. Card
+  Cài đặt cuối cùng rút gọn chỉ còn tiêu đề "🌴 Ngày nghỉ" + nút mở lịch (bỏ
+  hẳn dòng tóm tắt/giải thích dài theo yêu cầu user, vì số ngày đánh dấu sẽ
+  ngày càng nhiều và không cần thống kê ở đây). Đã verify đầy đủ từng vòng
+  chỉnh sửa bằng browser test thật.
+- **[30/08/2026]** Fix bug gợi ý mốc huy hiệu to-do sai sau khi streak đứt
+  (user báo: đạt streak 7 ngày, hôm qua bỏ lỡ, streak về 0 nhưng hint vẫn
+  hiện "còn 14 ngày nữa đạt mốc 14 ngày" thay vì quay về mốc thấp nhất 3
+  ngày). Nguyên nhân: `renderTodoBadges()` tìm "mốc kế tiếp" theo
+  `p.todoBadges` (huy hiệu đã mở khoá VĨNH VIỄN, đúng ý cho phần hiển thị
+  chip huy hiệu) thay vì theo streak hiện tại. Sửa: tìm mốc kế tiếp theo
+  `streak < b.days` thay vì `!earned.includes(b.days)` — chỉ đổi câu hint
+  động viên, chip huy hiệu đã mở khoá vẫn hiển thị unlocked vĩnh viễn như cũ.
+  Verify bằng test nhiều mức streak (0/8/13/14/100).
+- **[29/08/2026]** Fix bug sao không tự thu hồi khi Bố/Mẹ sửa lại lịch việc
+  sau khi bé "lách" (bé tự sửa lịch 1 việc để bớt số việc hôm nay, tick hết
+  được cộng sao; Bố/Mẹ sửa lại lịch như cũ nhưng sao sai vẫn còn nguyên vì
+  trước đây chỉ `toggleTask()` mới đối chiếu lại "đã xong hết chưa"). Tách
+  logic đối chiếu sao thành `reconcileTodayStar()`, gọi lại ở cả
+  `saveTaskModal()` và `deleteTask()`. Thêm `notifyStarRevoked()` báo Bố/Mẹ
+  biết lý do sao tự giảm. Verify bằng browser test đúng kịch bản báo cáo.
+- **[29/08/2026]** Nối theo fix trên: gọi `reconcileTodayStar()` ngay lúc mở
+  app / chuyển hồ sơ bé (không chỉ chờ thao tác mới) để tự sửa dữ liệu sai
+  tồn đọng từ trước khi có fix trên. Kèm theo 1 bug crash phát hiện lúc test:
+  gọi `saveAppData()` quá sớm (đầu file, trước khi hằng số ở cuối file kịp
+  khai báo) làm crash toàn bộ app (không render được gì) — sửa bằng ghi
+  thẳng `localStorage.setItem()` ở điểm đó thay vì gọi `saveAppData()`.
+- **[29/08/2026]** Bỏ lịch cron nội bộ GitHub Actions (`on.schedule`) — cron
+  nhiều lần bị GitHub bỏ qua hàng chục tiếng liền dù workflow ở trạng thái
+  active, không đáng tin cậy. Chuyển sang **cron-job.org** gọi trực tiếp API
+  `workflow_dispatch` theo đúng giờ thật; script vẫn tự chọn thời điểm ngẫu
+  nhiên trong khung để gửi (giữ nguyên trải nghiệm "bất ngờ" như cũ, chỉ đổi
+  nguồn trigger).
+- **[28/08/2026]** Fix dòng thừa **"from Checklist"** vẫn còn lặp trong
+  notification sau bản fix trước (user xác nhận đã nhận được thông báo, tức
+  pipeline gửi hoạt động bình thường — vấn đề là nội dung bị lặp: title tự
+  đặt "Checklist Của Con" + dòng Chrome tự chèn "from Checklist" theo
+  `short_name` trong `manifest.json`). Sửa: bỏ title tự đặt (về `title:''`
+  như cũ, không bỏ hẳn field để tránh lỗi hiện "undefined"), đổi
+  `short_name` thành "Checklist Của Con" để dòng Chrome tự chèn đọc đúng
+  nghĩa thay vì lặp. Giảm tần suất cron từ `*/15` xuống 2 lần/khung (phút
+  :05 và :35, lệch khỏi đúng đầu giờ) theo khuyến cáo GitHub để giảm rủi ro
+  rớt lịch.
+- **[28/08/2026]** Fix bug to-do mới thêm bị tính ngược về quá khứ làm giảm
+  sai chuỗi ngày (user báo: streak đang 6, thêm to-do mới hôm nay thì tụt
+  xuống 3). Nguyên nhân: `todosForDate()` áp dụng to-do mới cho MỌI ngày
+  khớp lịch tuần, kể cả các ngày quá khứ trước khi việc đó được tạo — những
+  ngày cũ chưa có log cho việc mới bị coi là "chưa xong hết", làm giảm sai
+  streak đã đạt được. Sửa: thêm `createdAt` khi tạo to-do mới,
+  `todosForDate()` bỏ qua to-do cho các ngày trước `createdAt`. To-do cũ
+  (tạo trước bản fix, không có `createdAt`) không bị ảnh hưởng.
 - **[27/08/2026]** Fix bug thật của "Đã hoàn thành" trong Thống kê tháng
   (user báo: điện thoại có 3 bài đã làm nhưng hiển thị 1) — nguyên nhân: đếm
   theo THÁNG CỦA HẠN NỘP thay vì tháng bé thực sự tick xong. Test đúng thời
@@ -215,12 +284,25 @@ _(tính đến 27/08/2026)_
 
 ## Đang làm dở
 
-_(không có việc dở dang tại thời điểm ghi — phiên gần nhất đã hoàn tất và
-verify bằng browser test thật, chưa nhận phản hồi test trên iPhone thật từ
+_(không có việc dở dang tại thời điểm ghi — phiên 30/08/2026 đã hoàn tất
+tính năng "Ngày nghỉ" + fix hint huy hiệu to-do, đã push lên GitHub, verify
+bằng browser test thật, chưa nhận phản hồi test trên điện thoại thật từ
 user)_
 
 ## Quyết định kỹ thuật quan trọng
 
+- **[30/08/2026] Câu động viên ngày nghỉ chọn theo hash(ngày), không phải
+  Math.random() thật mỗi lần render.** Lý do: `renderToday()`/
+  `renderTodoPage()` được gọi lại rất nhiều lần trong 1 ngày (mở app, chuyển
+  tab qua lại...) — nếu random thật mỗi lần, 1 ngày nghỉ mà bé mở app nhiều
+  lần sẽ thấy câu đổi liên tục, "cạn" kho 8 câu rất nhanh và mất cảm giác
+  đặc biệt. Hash theo `dateKey` (+ hậu tố `:task`/`:todo` để 2 trang không
+  bị trùng câu cùng ngày) đảm bảo CÙNG 1 ngày luôn ra CÙNG 1 câu, chỉ đổi
+  khi sang ngày nghỉ khác.
+- **[30/08/2026] Modal quản lý ngày nghỉ chỉ xác nhận PIN 1 LẦN lúc mở, không
+  hỏi lại cho từng ngày bấm chọn.** Lý do: đánh dấu ngày nghỉ thường theo
+  cụm (VD cả tuần nghỉ Tết) — bắt nhập PIN mỗi lần bấm 1 ô ngày sẽ rất phiền.
+  Đổi lại nếu sau này phát sinh nhu cầu bảo mật chặt hơn cho từng thao tác.
 - **[26/08/2026] Bài tập về nhà KHÔNG track nhiều ngày — tự xoá khi sang ngày
   mới.** ⚠️ **Đã bị NỚI RỘNG thành "theo tháng" ở bản cập nhật sau cùng ngày**
   (xem entry "⚠️ Quá hạn + thống kê tháng" ở mục "Đã hoàn thành") vì user cần
@@ -272,10 +354,16 @@ user)_
 
 ## Việc tồn đọng / Next steps
 
+- **Cần user test tính năng "Ngày nghỉ" trên điện thoại thật** (mới verify
+  bằng browser test — PIN, lịch tháng đánh dấu/bỏ đánh dấu, thu hồi sao,
+  streak to-do giữ nguyên, câu động viên theo ngày...).
+- **Cần user xác nhận fix hint huy hiệu to-do** (mốc kế tiếp tính theo streak
+  hiện tại thay vì huy hiệu đã đạt) trên dữ liệu streak thật của bé — mới
+  verify bằng browser mô phỏng nhiều mức streak.
 - **Cần user xác nhận trên điện thoại thật** xem push notification đã hết
-  dòng thừa "Checklist / from Checklist" chưa sau khi đổi title (xem mục
-  "Đã hoàn thành") — chưa verify được vì máy làm việc không chạy Node/gửi
-  FCM thật được.
+  hẳn dòng thừa "from Checklist" chưa sau bản fix đổi `short_name` (28/08) —
+  bản fix trước đó (title) đã báo chưa hết, đây là lần fix thứ 2 cho cùng
+  vấn đề, chưa có xác nhận tiếp theo từ user.
 - **Thống kê tháng của Bài tập về nhà chỉ xem được THÁNG HIỆN TẠI** — do dữ
   liệu bị dọn khi qua tháng mới (xem "Quyết định kỹ thuật"), nên qua đầu
   tháng sau sẽ KHÔNG xem lại được số liệu tháng trước (không có kho lưu trữ
@@ -283,19 +371,17 @@ user)_
   lưu counter tổng hợp riêng theo tháng (giống cách `todoCompleteDays` chốt
   cứng kết quả từng ngày cho to-do) thay vì giữ nguyên item — việc lớn hơn,
   chưa làm vì user chỉ yêu cầu "biết trong tháng" (đọc là tháng đang chạy).
-- **Cần chạy thử push bài tập về nhà bằng `workflow_dispatch`** (chọn
-  `window: evening`, `force_send: true`) sau khi deploy — máy làm việc hiện
-  tại không có Node cài sẵn nên chỉ rà cú pháp/logic `send-reminders.js` bằng
-  mắt, chưa chạy thật được (kể cả `node --check`). Ưu tiên test trước khi tin
-  tưởng hoàn toàn vào phần nhắc bài tập mới.
-- **Cần user test thật trên iPhone** phần custom date-picker (từ phiên trước) —
-  đã verify bằng browser giả lập, chưa có xác nhận trên thiết bị thật.
-- **Cần theo dõi thực tế khung thông báo mới** (`weekend_morning` 10h-11h thứ
-  7/CN) sau khi deploy — GitHub Actions cron cần đủ 1 chu kỳ (hoặc test thủ
-  công qua `workflow_dispatch` chọn `weekend_morning` + `force_send`) để chắc
-  chắn gửi đúng giờ, đúng ngày, và text rút gọn hiển thị đúng trên điện thoại
-  thật (mới verify bằng cách chạy hàm dựng text trong browser, chưa nhận
-  notification thật).
+- **Cron nhắc nhở giờ trigger từ cron-job.org (29/08), không còn `on.schedule`
+  của GitHub Actions** — cần theo dõi thêm vài ngày xem cron-job.org gọi
+  `workflow_dispatch` có đều đặn/đúng giờ hơn cơ chế cũ không (lý do đổi:
+  cron GitHub Actions từng bị bỏ lịch hàng chục tiếng liền). Riêng khung
+  `weekend_morning` (10h-11h T7/CN) và phần nhắc bài tập về nhà vẫn chưa có
+  lần chạy thử `workflow_dispatch` thủ công nào để chắc chắn logic đúng —
+  máy làm việc không có Node/Firebase credentials để tự chạy `node --check`
+  hay test thật.
+- **Cần user test thật trên iPhone** phần custom date-picker (từ phiên
+  26/08) — đã verify bằng browser giả lập, chưa có xác nhận trên thiết bị
+  thật.
 - Chưa có `README.md` mô tả cách setup Firebase project mới / deploy từ đầu
   cho người khác join dự án (hiện tại chỉ có comment rải rác trong code).
 - Luôn nhớ bump `CACHE_NAME` trong `sw.js` mỗi khi sửa `index.html`/`app.js`/
