@@ -84,6 +84,8 @@ function newProfile(name, avatar){
     vouchers: [],           // [{ id, title, emoji, cost, status:'unused'|'used', redeemedAt, usedAt }]
     homework: [],           // bài tập về nhà: [{ id, subject, title, dueDate:'YYYY-MM-DD',
                              // note, status:'pending'|'done', createdAt, doneAt }]
+    dayOffDates: {},        // { 'YYYY-MM-DD': true } -> ngày nghỉ, không cần checklist/to-do,
+                             // không tính sao, không tính streak (xem isDayOff())
   };
 }
 function defaultAppData(){
@@ -137,6 +139,7 @@ if(typeof appData.parentPin === 'undefined') appData.parentPin = null;
   if(!p.todoCompleteDays || typeof p.todoCompleteDays !== 'object') p.todoCompleteDays = {};
   if(!Array.isArray(p.todoBadges)) p.todoBadges = [];
   if(!Array.isArray(p.homework)) p.homework = [];
+  if(!p.dayOffDates || typeof p.dayOffDates !== 'object') p.dayOffDates = {};
   // Bài tập về nhà không cần theo dõi nhiều tháng: bài nào hạn nộp thuộc THÁNG
   // TRƯỚC (dù đã làm hay chưa) tự động bị dọn khỏi danh sách mỗi khi app mở lại
   // vào tháng mới. Trong cùng 1 tháng, bài quá hạn (đã qua ngày, chưa tick xong)
@@ -247,6 +250,15 @@ function progressFor(d){
   return { done, total: list.length };
 }
 
+/* ---------- Ngày nghỉ (do Bố/Mẹ đánh dấu, cần mã PIN) ---------- */
+// Ngày nghỉ: checklist + to-do không cần làm, không tick được, không tính sao,
+// không tính (nhưng cũng không phá) streak to-do — xem addDayOffDate(),
+// isTodoDayComplete() và các chỗ render bị chặn tương tác bên dưới.
+function isDayOff(dateKey){
+  const p = activeProfile();
+  return !!(p.dayOffDates && p.dayOffDates[dateKey]);
+}
+
 /* ---------- Core logic: To-do (không bắt buộc, không tính sao) ---------- */
 function fmtDateShort(dateKey){
   const [y,m,d] = dateKey.split('-');
@@ -281,6 +293,7 @@ function setTodoDone(dateKey, todoId, val){
 }
 function toggleTodo(todoId){
   const key = todayKey();
+  if(isDayOff(key)) return; // ngày nghỉ: không cho tick (UI cũng đã ẩn checkbox)
   const wasDone = isTodoDone(key, todoId);
   setTodoDone(key, todoId, !wasDone);
   lockTodoDayComplete(key); // chốt lại kết quả hôm nay ngay lúc này, xem giải thích ở khai báo hàm
@@ -318,6 +331,9 @@ function lockTodoDayComplete(dateKey){
 // ngày chưa từng tương tác) thì fallback tính theo lịch to-do hiện tại như cũ.
 // Trả về true/false, hoặc null nếu ngày đó không có to-do nào được lên lịch.
 function isTodoDayComplete(dateKey){
+  // Ngày nghỉ: coi như "không có to-do nào" (null) để calcTodoStreak() tự bỏ qua,
+  // không cộng cũng không phá streak — tái dùng đúng nhánh xử lý null có sẵn.
+  if(isDayOff(dateKey)) return null;
   const p = activeProfile();
   if(p.todoCompleteDays && typeof p.todoCompleteDays[dateKey] === 'boolean'){
     return p.todoCompleteDays[dateKey];
@@ -440,6 +456,7 @@ function reconcileTodayStar(){
 
 function toggleTask(taskId){
   const key = todayKey();
+  if(isDayOff(key)) return; // ngày nghỉ: không cho tick, không tính sao (UI cũng đã ẩn checkbox)
   const wasDone = isDone(key, taskId);
   setDone(key, taskId, !wasDone);
   const result = reconcileTodayStar();
@@ -722,15 +739,26 @@ function renderToday(){
 
   const list = tasksForDate(todayDate());
   const key = todayKey();
+  const dayOff = isDayOff(key);
   const { done, total } = progressFor(todayDate());
   const pct = total ? Math.round(done/total*100) : 0;
-  document.getElementById('progressFill').style.width = pct + '%';
-  document.getElementById('progressLabel').textContent = `${done}/${total} việc đã xong`;
-  document.getElementById('progressPct').textContent = pct + '%';
+  const progressFillEl = document.getElementById('progressFill');
+  progressFillEl.classList.toggle('dayoff-fill', dayOff);
+  if(dayOff){
+    progressFillEl.style.width = '100%';
+    document.getElementById('progressLabel').textContent = '🌴 Hôm nay là ngày nghỉ';
+    document.getElementById('progressPct').textContent = '';
+  } else {
+    progressFillEl.style.width = pct + '%';
+    document.getElementById('progressLabel').textContent = `${done}/${total} việc đã xong`;
+    document.getElementById('progressPct').textContent = pct + '%';
+  }
 
   const taskListEl = document.getElementById('taskList');
   taskListEl.innerHTML = '';
-  if(list.length === 0){
+  if(dayOff){
+    taskListEl.innerHTML = `<div class="empty-state"><span class="big">🌴</span>Hôm nay là ngày nghỉ, bé không cần làm checklist đâu.<br>Không mất mà cũng không được thêm sao hôm nay nhé!</div>`;
+  } else if(list.length === 0){
     taskListEl.innerHTML = `<div class="empty-state"><span class="big">🌤️</span>Hôm nay không có việc nào trong danh sách.<br>Vào Cài đặt để thêm việc nhé!</div>`;
   } else {
     list.forEach(t=>{
@@ -747,7 +775,7 @@ function renderToday(){
     });
   }
 
-  if(total>0 && done===total){
+  if(!dayOff && total>0 && done===total){
     document.getElementById('doneCard').style.display = 'block';
   } else {
     document.getElementById('doneCard').style.display = 'none';
@@ -759,10 +787,14 @@ function renderToday(){
 function updateTabBadges(){
   const key = todayKey();
   const p = activeProfile();
+  const dayOff = isDayOff(key);
 
   const { done: taskDone, total: taskTotal } = progressFor(todayDate());
   const todayBadge = document.getElementById('tabBadgeToday');
-  if(taskTotal > 0){
+  if(dayOff){
+    todayBadge.textContent = '🌴';
+    todayBadge.style.display = 'inline-block';
+  } else if(taskTotal > 0){
     todayBadge.textContent = `${taskDone}/${taskTotal}`;
     todayBadge.style.display = 'inline-block';
   } else {
@@ -784,7 +816,10 @@ function updateTabBadges(){
   const todoDone = todoList.filter(t=>isTodoDone(key, t.id)).length;
   const todoTotal = todoList.length;
   const todoBadge = document.getElementById('tabBadgeTodo');
-  if(todoTotal > 0){
+  if(dayOff){
+    todoBadge.textContent = '🌴';
+    todoBadge.style.display = 'inline-block';
+  } else if(todoTotal > 0){
     todoBadge.textContent = `${todoDone}/${todoTotal}`;
     todoBadge.style.display = 'inline-block';
   } else {
@@ -813,15 +848,26 @@ function renderTodoPage(){
 
   const list = todosForDate(todayDate());
   const key = todayKey();
+  const dayOff = isDayOff(key);
   const done = list.filter(t=>isTodoDone(key, t.id)).length;
   const total = list.length;
   const pct = total ? Math.round(done/total*100) : 0;
-  document.getElementById('todoProgressFill').style.width = pct + '%';
-  document.getElementById('todoProgressLabel').textContent = `${done}/${total} việc đã làm`;
-  document.getElementById('todoProgressPct').textContent = pct + '%';
+  const todoFillEl = document.getElementById('todoProgressFill');
+  todoFillEl.classList.toggle('dayoff-fill', dayOff);
+  if(dayOff){
+    todoFillEl.style.width = '100%';
+    document.getElementById('todoProgressLabel').textContent = '🌴 Hôm nay là ngày nghỉ';
+    document.getElementById('todoProgressPct').textContent = '';
+  } else {
+    todoFillEl.style.width = pct + '%';
+    document.getElementById('todoProgressLabel').textContent = `${done}/${total} việc đã làm`;
+    document.getElementById('todoProgressPct').textContent = pct + '%';
+  }
 
   const listEl = document.getElementById('todoList');
-  if(list.length === 0){
+  if(dayOff){
+    listEl.innerHTML = `<div class="empty-state"><span class="big">🌴</span>Hôm nay là ngày nghỉ, bé không cần làm to-do đâu.<br>Không mất mà cũng không được thêm chuỗi ngày 🔥 hôm nay nhé!</div>`;
+  } else if(list.length === 0){
     listEl.innerHTML = `<div class="empty-state"><span class="big">📝</span>Hôm nay chưa có việc to-do nào.<br>Vào Cài đặt để thêm nhé!</div>`;
   } else {
     listEl.innerHTML = '';
@@ -870,9 +916,11 @@ function renderTodoMonthCalendar(){
     const key = toKey(d);
     const isFuture = d > today && key !== todayKey_;
     const isToday = key === todayKey_;
-    const done = !isFuture && isTodoDayComplete(key) === true;
-    let cls = 'month-cal-cell' + (isToday ? ' today' : '') + (done ? ' done' : '');
-    return `<div class="${cls}" data-key="${key}" title="${pad(d.getDate())}/${pad(month+1)}">${done ? '✅' : d.getDate()}</div>`;
+    const off = isDayOff(key);
+    const done = !isFuture && !off && isTodoDayComplete(key) === true;
+    let cls = 'month-cal-cell' + (isToday ? ' today' : '') + (done ? ' done' : '') + (off ? ' dayoff' : '');
+    const label = off ? 'Ngày nghỉ' : `${pad(d.getDate())}/${pad(month+1)}`;
+    return `<div class="${cls}" data-key="${key}" title="${label}">${off ? '🌴' : (done ? '✅' : d.getDate())}</div>`;
   }).join('');
   gridEl.querySelectorAll('[data-key]').forEach(cell=>{
     cell.addEventListener('click', ()=> openTodoDayDetail(cell.dataset.key));
@@ -888,6 +936,11 @@ function openTodoDayDetail(key){
   const list = todosForDate(d);
   document.getElementById('todoDayDetailTitle').textContent = `📝 ${fmtHuman(d)}`;
   const listEl = document.getElementById('todoDayDetailList');
+  if(isDayOff(key)){
+    listEl.innerHTML = `<div class="empty-state" style="padding:12px 0"><span class="big">🌴</span>Ngày nghỉ — bé không cần làm to-do ngày này.</div>`;
+    document.getElementById('todoDayDetailModal').classList.add('open');
+    return;
+  }
   if(list.length === 0){
     listEl.innerHTML = `<div class="empty-state" style="padding:12px 0">Ngày này không có to-do nào.</div>`;
   } else {
@@ -925,7 +978,9 @@ function renderStats(){
       const key = toKey(d);
       const isFuture = d > today;
       let mark = '';
-      if(!t.days.includes(wd)){
+      if(isDayOff(key)){
+        mark = '<span class="mark" title="Ngày nghỉ">🌴</span>';
+      } else if(!t.days.includes(wd)){
         mark = '<span class="mark" style="color:#ccc">–</span>';
       } else if(isFuture && key !== todayKey()){
         mark = '<span class="mark" style="color:#ddd">·</span>';
@@ -942,7 +997,7 @@ function renderStats(){
 
   // Missed days this week (days up to today with total>0 and done<total)
   const missDaysEl = document.getElementById('missDays');
-  const missedDays = weekDays.filter(d => d <= today).filter(d=>{
+  const missedDays = weekDays.filter(d => d <= today && !isDayOff(toKey(d))).filter(d=>{
     const { done, total } = progressFor(d);
     return total>0 && done<total;
   });
@@ -959,7 +1014,7 @@ function renderStats(){
   const missTasksEl = document.getElementById('missTasks');
   const rows = p.tasks.map(t=>{
     let missed = 0;
-    weekDays.filter(d=>d<=today).forEach(d=>{
+    weekDays.filter(d=>d<=today && !isDayOff(toKey(d))).forEach(d=>{
       const wd = weekdayOf(d);
       if(t.days.includes(wd) && !isDone(toKey(d), t.id)) missed++;
     });
@@ -1074,6 +1129,22 @@ function renderSettings(){
     </div>
   `).join('') || `<div class="empty-state">Chưa có mốc thưởng nào.</div>`;
 
+  const dayOffListEl = document.getElementById('settingsDayOffList');
+  if(dayOffListEl){
+    const dates = Object.keys(p.dayOffDates || {}).sort();
+    dayOffListEl.innerHTML = dates.length
+      ? dates.map(k=>`
+        <div class="list-item">
+          <div class="emoji">🌴</div>
+          <div class="info">
+            <div class="t">${fmtHuman(dateFromKey(k))}</div>
+          </div>
+          <button class="icon-btn danger" onclick="requestRemoveDayOff('${k}')">🗑️</button>
+        </div>
+      `).join('')
+      : `<div class="empty-state">Chưa có ngày nghỉ nào được đánh dấu.</div>`;
+  }
+
   const pinBtn = document.getElementById('managePinBtn');
   if(pinBtn){
     pinBtn.textContent = appData.parentPin ? '🔒' : '🔓';
@@ -1081,6 +1152,37 @@ function renderSettings(){
       ? 'Đã đặt mã PIN — bấm để đổi'
       : 'Chưa đặt mã PIN — bấm để đặt (nên đặt để chỉ Bố/Mẹ mới tặng/thu hồi/đổi sao được)';
   }
+}
+
+/* ---------- Quản lý Ngày nghỉ (Bố/Mẹ) — yêu cầu mã PIN cả khi thêm lẫn khi xoá ---------- */
+// Đánh dấu 1 ngày là ngày nghỉ: checklist/to-do ngày đó không tick được, không tính
+// sao, không tính streak. Nếu ngày đó lỡ đã được cộng sao từ trước (VD tick xong hết
+// việc rồi mới đổi thành ngày nghỉ), thu hồi lại luôn — ngày nghỉ thì không giữ sao.
+function addDayOffDate(dateKey){
+  const p = activeProfile();
+  p.dayOffDates = p.dayOffDates || {};
+  if(p.dayOffDates[dateKey]) return; // đã đánh dấu rồi, không có gì để làm thêm
+  p.dayOffDates[dateKey] = true;
+  if(p.starDays[dateKey]){
+    delete p.starDays[dateKey];
+    p.stars = Math.max(0, p.stars - 1);
+    removeCompleteStarHistory(p, dateKey);
+  }
+  saveAppData();
+  renderAll();
+}
+function requestAddDayOff(){
+  const proceed = ()=> openDatePicker(todayKey(), null, (key)=> addDayOffDate(key));
+  if(!appData.parentPin){ openPinSetupModal(proceed); } else { openPinVerifyModal(proceed); }
+}
+function requestRemoveDayOff(dateKey){
+  const proceed = ()=>{
+    const p = activeProfile();
+    if(p.dayOffDates) delete p.dayOffDates[dateKey];
+    saveAppData();
+    renderAll();
+  };
+  if(!appData.parentPin){ openPinSetupModal(proceed); } else { openPinVerifyModal(proceed); }
 }
 
 function deleteTask(id){
@@ -2328,6 +2430,10 @@ document.addEventListener('DOMContentLoaded', ()=>{
       openPinSetupModal(null);
     }
   });
+
+  // Ngày nghỉ (Bố/Mẹ) — đánh dấu 1 ngày không cần checklist/to-do, không tính sao,
+  // yêu cầu mã PIN
+  document.getElementById('addDayOffBtn').addEventListener('click', requestAddDayOff);
 
   // Sao lưu dữ liệu: xuất không cần PIN (chỉ đọc), nhập cần PIN vì sẽ ghi đè toàn bộ data
   document.getElementById('exportDataBtn').addEventListener('click', exportData);
