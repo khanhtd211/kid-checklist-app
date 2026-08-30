@@ -40,6 +40,33 @@ const DEDUCT_REASONS = [
   { emoji:'👊', text:'Đánh/cắn bạn' },
   { emoji:'⚠️', text:'Khác' },
 ];
+// Câu động viên hiển thị ở trang Hôm nay/To-do vào ngày nghỉ — cố ý viết nhiều câu
+// khác nhau, chọn NGẪU NHIÊN mỗi lần render (xem pickDayOffMessage()) thay vì 1 câu
+// cố định, để app có cảm giác luôn mới mẻ thay vì lặp lại nhàm chán. Giọng văn thiên
+// về động viên/ăn mừng, tránh kiểu giải thích luật hay ra lệnh. {name} sẽ được thay
+// bằng tên thật của bé (VD "Múp") thay vì gọi chung chung "con/bé".
+const DAYOFF_TASK_MESSAGES = [
+  '🌴 Yay, hôm nay {name} được nghỉ rồi! Tha hồ chơi, đọc truyện hay làm điều mình thích nhé!',
+  '🎉 Ngày nghỉ đặc biệt! {name} không cần làm checklist đâu, hôm nay là ngày của riêng {name} đó!',
+  '🏖️ Nắng đẹp thế này, {name} ra ngoài chơi hay cuộn tròn xem phim đều tuyệt cả!',
+  '🌈 Bụng đói thì ăn, buồn ngủ thì ngủ — hôm nay {name} chẳng có việc gì "phải làm" cả!',
+  '🧸 Hôm nay {name} dành để chơi thật vui bên người thân yêu nhé!',
+  '☀️ {name} nghỉ xả hơi một hôm để mai lại tràn đầy năng lượng nào!',
+  '🎈 {name} không cần tick việc gì hôm nay — cứ vui chơi thật thoải mái nhé!',
+  '🥳 Bíp bíp, chế độ nghỉ ngơi của {name} được kích hoạt! Chúc {name} một ngày thật vui!',
+];
+const DAYOFF_TODO_MESSAGES = [
+  '🌴 Hôm nay nghỉ rồi, chuỗi ngày 🔥 của {name} vẫn an toàn, cứ yên tâm vui chơi nhé!',
+  '🎉 Ngày nghỉ đến rồi! {name} xếp to-do qua một bên, tận hưởng thời gian bên gia đình thôi!',
+  '🏖️ Nghỉ ngơi một hôm cũng đáng lắm, {name} ơi — mai mình lại tiếp tục nào!',
+  '🌈 Hôm nay là ngày để {name} chơi thật vui, chuỗi ngày không đi đâu cả đâu!',
+  '🧸 {name} cứ thảnh thơi nhé, ngày mai to-do lại chờ quay lại thôi!',
+  '☀️ {name} nạp đầy năng lượng hôm nay, mai lại chinh phục tiếp chuỗi ngày nào!',
+  '🎈 Không có to-do nào hôm nay cả — {name} tự do tận hưởng ngày nghỉ nhé!',
+  '🥳 Ngày nghỉ vui vẻ, {name} ơi! Chuỗi ngày vẫn giữ nguyên, cứ nghỉ ngơi thoải mái!',
+];
+function pickRandom(arr){ return arr[Math.floor(Math.random() * arr.length)]; }
+function pickDayOffMessage(arr, name){ return pickRandom(arr).split('{name}').join(name); }
 
 function uid(prefix){ return (prefix||'t') + Math.random().toString(36).slice(2,9); }
 
@@ -762,7 +789,7 @@ function renderToday(){
   const taskListEl = document.getElementById('taskList');
   taskListEl.innerHTML = '';
   if(dayOff){
-    taskListEl.innerHTML = `<div class="empty-state"><span class="big">🌴</span>Hôm nay là ngày nghỉ, bé không cần làm checklist đâu.<br>Không mất mà cũng không được thêm sao hôm nay nhé!</div>`;
+    taskListEl.innerHTML = `<div class="empty-state"><span class="big">🌴</span>${escapeHtml(pickDayOffMessage(DAYOFF_TASK_MESSAGES, p.name))}</div>`;
   } else if(list.length === 0){
     taskListEl.innerHTML = `<div class="empty-state"><span class="big">🌤️</span>Hôm nay không có việc nào trong danh sách.<br>Vào Cài đặt để thêm việc nhé!</div>`;
   } else {
@@ -871,7 +898,7 @@ function renderTodoPage(){
 
   const listEl = document.getElementById('todoList');
   if(dayOff){
-    listEl.innerHTML = `<div class="empty-state"><span class="big">🌴</span>Hôm nay là ngày nghỉ, bé không cần làm to-do đâu.<br>Không mất mà cũng không được thêm chuỗi ngày 🔥 hôm nay nhé!</div>`;
+    listEl.innerHTML = `<div class="empty-state"><span class="big">🌴</span>${escapeHtml(pickDayOffMessage(DAYOFF_TODO_MESSAGES, activeProfile().name))}</div>`;
   } else if(list.length === 0){
     listEl.innerHTML = `<div class="empty-state"><span class="big">📝</span>Hôm nay chưa có việc to-do nào.<br>Vào Cài đặt để thêm nhé!</div>`;
   } else {
