@@ -2048,6 +2048,9 @@ const FIREBASE_CONFIG = {
 };
 const SYNC_CODE_KEY = 'kidChecklistSyncCode_v1';
 let fbApp = null, fbDb = null, fbUnsub = null, syncPushTimer = null, syncApplyingRemote = false;
+// true khi đã nhận được snapshot ĐẦU TIÊN từ Firestore kể từ lần gọi
+// startSyncListener() gần nhất — xem giải thích chi tiết ở pushToCloud().
+let syncReady = false;
 
 function getSyncCode(){ return localStorage.getItem(SYNC_CODE_KEY) || null; }
 function setSyncCode(code){ localStorage.setItem(SYNC_CODE_KEY, code); }
@@ -2080,6 +2083,22 @@ function syncDocRef(){
 function pushToCloud(){
   const ref = syncDocRef();
   if(!ref || syncApplyingRemote) return;
+  // Chờ nhận được snapshot ĐẦU TIÊN từ máy chủ trước khi cho phép đẩy dữ liệu lên.
+  // Fix cho bug thật: máy A thêm phiếu quà -> đồng bộ lên mây. Máy B đang đóng/
+  // offline, dữ liệu local của B vẫn là bản CŨ (thiếu phiếu quà đó). Máy B mở app
+  // lên, listener bắt đầu tải bản mới nhất từ mây (cần chút thời gian, có độ trễ
+  // mạng) — nhưng nếu bé/phụ huynh thao tác gì đó (tick việc...) NGAY LÚC ĐÓ, trước
+  // khi bản mới kịp tải về, saveAppData() sẽ đẩy thẳng bản CŨ của máy B lên với
+  // timestamp MỚI HƠN (vì là thời điểm thực tế muộn hơn) -> ghi đè mất phiếu quà mà
+  // máy A vừa thêm, trên CẢ 2 máy (vì mọi máy đang nghe đều nhận bản ghi đè này qua
+  // onSnapshot). Chặn lại bằng cách hoãn push tới khi syncReady=true (được bật lên
+  // trong startSyncListener() ngay khi có snapshot đầu tiên, dù có thay đổi gì hay
+  // không) — đảm bảo máy luôn có đúng bản mới nhất làm nền trước khi tự ý ghi đè
+  // lên máy chủ.
+  if(!syncReady){
+    setTimeout(pushToCloud, 500);
+    return;
+  }
   appData.updatedAt = Date.now();
   // merge:true — không được ghi đè cả document, vì document còn chứa notifyTokens/notifySchedule
   // (dữ liệu thông báo) không thuộc về appData và không được phép bị xoá mỗi lần lưu.
@@ -2096,8 +2115,12 @@ function startSyncListener(){
   const ref = syncDocRef();
   if(!ref) return;
   maybeAutoBackup();
+  syncReady = false; // đang chờ xác nhận bản mới nhất từ máy chủ, xem pushToCloud()
   if(fbUnsub){ fbUnsub(); fbUnsub = null; }
   fbUnsub = ref.onSnapshot(snap=>{
+    // Bật syncReady NGAY dù snapshot này có mang thay đổi mới hay không — chỉ cần
+    // biết chắc đã hỏi máy chủ ít nhất 1 lần là đủ an toàn để tự tin đẩy dữ liệu.
+    syncReady = true;
     if(!snap.exists) return;
     const remote = snap.data();
     if(!remote || !remote.json) return;
@@ -2113,7 +2136,12 @@ function startSyncListener(){
     }finally{
       syncApplyingRemote = false;
     }
-  }, err=>{ console.error('Lỗi lắng nghe đồng bộ', err); });
+  }, err=>{
+    // Lỗi kết nối kéo dài không nên chặn push mãi mãi (đồng bộ vốn best-effort) —
+    // cho phép đẩy bình thường, chấp nhận rủi ro nhỏ như hành vi cũ trước bản fix.
+    syncReady = true;
+    console.error('Lỗi lắng nghe đồng bộ', err);
+  });
 }
 
 function createSyncCodeFlow(){
