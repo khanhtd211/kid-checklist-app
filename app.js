@@ -849,9 +849,19 @@ function updateTabBadges(){
     todayBadge.style.display = 'none';
   }
 
+  // Chỉ đếm bài tập ĐANG THỰC SỰ HIỂN THỊ ở trang Bài tập (thẻ "⚠️ Quá hạn" +
+  // danh sách chính — cùng tiêu chí lọc với renderHomeworkPage()), KHÔNG dùng
+  // p.homework thô. p.homework còn giữ lại cả bài đã xong NHƯNG đã quá hạn nộp
+  // (purposely giữ tới hết tháng chỉ để tính thống kê "Đã hoàn thành" trong
+  // tháng — xem purgeStaleHomework/renderHomeworkPage) — loại bài này không còn
+  // xuất hiện ở đâu trong danh sách nữa (không nằm trong "⚠️ Quá hạn" vì đã
+  // xong, cũng không nằm trong danh sách chính vì hạn nộp đã qua), nên trước
+  // đây badge bị đếm dư số bài này vào cả tử số lẫn mẫu số (bug user báo cáo:
+  // hiện 4/6 dù danh sách chỉ còn đúng 3 bài, 1 bài đã xong).
   const homeworkAll = p.homework || [];
-  const homeworkDone = homeworkAll.filter(h=>h.status==='done').length;
-  const homeworkTotal = homeworkAll.length;
+  const homeworkVisible = homeworkAll.filter(h => h.dueDate >= key || h.status !== 'done');
+  const homeworkDone = homeworkVisible.filter(h=>h.status==='done').length;
+  const homeworkTotal = homeworkVisible.length;
   const homeworkBadge = document.getElementById('tabBadgeHomework');
   if(homeworkTotal > 0){
     homeworkBadge.textContent = `${homeworkDone}/${homeworkTotal}`;
