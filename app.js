@@ -949,13 +949,34 @@ function renderTodoPage(){
   updateTabBadges();
 }
 
+// Tháng đang xem ở lịch theo dõi to-do — mặc định tháng hiện tại, đổi khi bấm
+// nút lùi/tiến (xem shiftTodoCalMonth()). Chỉ reset về tháng hiện tại lúc CHUYỂN
+// VÀO tab To-do (switchTab()), không reset mỗi lần renderTodoPage() chạy lại
+// (VD sau khi tick 1 to-do) — tránh giật ngược về tháng hiện tại khi đang xem
+// tháng khác giữa chừng.
+let todoCalViewYear = todayDate().getFullYear();
+let todoCalViewMonth = todayDate().getMonth(); // 0-11
+function resetTodoCalToCurrentMonth(){
+  const today = todayDate();
+  todoCalViewYear = today.getFullYear();
+  todoCalViewMonth = today.getMonth();
+}
+function shiftTodoCalMonth(delta){
+  todoCalViewMonth += delta;
+  if(todoCalViewMonth < 0){ todoCalViewMonth = 11; todoCalViewYear--; }
+  else if(todoCalViewMonth > 11){ todoCalViewMonth = 0; todoCalViewYear++; }
+  renderTodoMonthCalendar();
+}
 function renderTodoMonthCalendar(){
   const today = todayDate();
-  const year = today.getFullYear();
-  const month = today.getMonth(); // 0-11
+  const year = todoCalViewYear;
+  const month = todoCalViewMonth; // 0-11
   const todayKey_ = todayKey();
+  const isCurrentMonth = year === today.getFullYear() && month === today.getMonth();
 
   document.getElementById('todoCalTitle').textContent = `🗓️ Lịch theo dõi tháng ${month + 1}/${year}`;
+  const nextBtn = document.getElementById('todoCalNextBtn');
+  if(nextBtn) nextBtn.disabled = isCurrentMonth; // không cho xem tháng tương lai (chưa có dữ liệu)
 
   const headEl = document.getElementById('todoCalHead');
   headEl.innerHTML = ['T2','T3','T4','T5','T6','T7','CN'].map(l=>`<div>${l}</div>`).join('');
@@ -2024,7 +2045,7 @@ function switchTab(name){
   document.getElementById('tabbar').style.display = (name==='picker' || name==='datamanage' || name==='history' || name==='stats') ? 'none' : 'flex';
   if(name==='today') renderToday();
   if(name==='homework') renderHomeworkPage();
-  if(name==='todo') renderTodoPage();
+  if(name==='todo'){ resetTodoCalToCurrentMonth(); renderTodoPage(); }
   if(name==='stats') renderStats();
   if(name==='history') renderHistory();
   if(name==='voucher') renderVouchersPage();
@@ -2544,6 +2565,10 @@ document.addEventListener('DOMContentLoaded', ()=>{
   document.getElementById('todoDayDetailCloseBtn').addEventListener('click', ()=>{
     document.getElementById('todoDayDetailModal').classList.remove('open');
   });
+
+  // Lịch theo dõi to-do — lùi/tiến xem tháng trước/sau
+  document.getElementById('todoCalPrevBtn').addEventListener('click', ()=> shiftTodoCalMonth(-1));
+  document.getElementById('todoCalNextBtn').addEventListener('click', ()=> shiftTodoCalMonth(1));
 
   document.getElementById('managePinBtn').addEventListener('click', ()=>{
     if(appData.parentPin){

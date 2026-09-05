@@ -1,4 +1,4 @@
-const CACHE_NAME = 'kid-checklist-v79';
+const CACHE_NAME = 'kid-checklist-v80';
 const ASSETS = [
   './',
   './index.html',
