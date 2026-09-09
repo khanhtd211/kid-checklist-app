@@ -1655,6 +1655,9 @@ function saveGiftVoucherModal(){
   showNotifyModal({ icon: emoji, title: 'Đã tặng phiếu quà!', html: `Phiếu "<b>${escapeHtml(title)}</b>" đã được lưu vào tab 🎫 Phiếu quà của ${p.name}.`, confetti: true });
 }
 
+// true = đang hiện TẤT CẢ phiếu đã dùng (kể cả >30 ngày), sau khi bấm "Xem thêm".
+// Reset về false mỗi lần chuyển VÀO tab Phiếu quà (switchTab()).
+let voucherShowAllUsed = false;
 function renderVouchersPage(){
   const p = activeProfile();
   document.getElementById('voucherProfileName').textContent = `Kho phiếu quà tặng của ${p.name} ${p.avatar}`;
@@ -1688,11 +1691,25 @@ function renderVouchersPage(){
     });
   }
 
+  // Phiếu đã dùng càng dùng lâu càng dài ra, mà thực tế không cần xem lại phiếu
+  // cũ hơn 1 tháng — mặc định chỉ hiện phiếu dùng trong 30 ngày gần nhất, phiếu
+  // cũ hơn ẩn bớt (không xoá dữ liệu) sau nút "Xem thêm" để vẫn tra lại được khi
+  // cần. voucherShowAllUsed reset về false mỗi lần vào lại tab Phiếu quà.
+  const usedCutoff = Date.now() - 30*24*60*60*1000;
+  const usedRecent = used.filter(v => (v.usedAt||0) >= usedCutoff);
+  const usedOlder = used.filter(v => (v.usedAt||0) < usedCutoff);
+  const usedToShow = voucherShowAllUsed ? used : usedRecent;
+
   const usedEl = document.getElementById('voucherUsedList');
   if(used.length === 0){
     usedEl.innerHTML = `<div class="empty-state" style="padding:12px 0">Chưa có phiếu nào đã dùng.</div>`;
+  } else if(usedToShow.length === 0){
+    // Có phiếu cũ nhưng không có phiếu nào trong 30 ngày qua.
+    usedEl.innerHTML = `<div class="empty-state" style="padding:12px 0">Không có phiếu nào dùng trong 30 ngày qua.</div>
+      <button type="button" class="add-btn neutral" id="voucherShowMoreBtn">Xem ${usedOlder.length} phiếu cũ hơn</button>`;
+    document.getElementById('voucherShowMoreBtn').addEventListener('click', ()=>{ voucherShowAllUsed = true; renderVouchersPage(); });
   } else {
-    usedEl.innerHTML = used.map(v=>`
+    usedEl.innerHTML = usedToShow.map(v=>`
       <div class="voucher-card used">
         <div class="voucher-emoji">${v.emoji}</div>
         <div class="voucher-info">
@@ -1701,10 +1718,15 @@ function renderVouchersPage(){
         </div>
         <button type="button" class="icon-btn danger" data-delete-id="${v.id}">🗑️</button>
       </div>
-    `).join('');
+    `).join('')
+    + (!voucherShowAllUsed && usedOlder.length > 0
+        ? `<button type="button" class="add-btn neutral" id="voucherShowMoreBtn">Xem thêm ${usedOlder.length} phiếu cũ hơn (&gt;30 ngày)</button>`
+        : '');
     usedEl.querySelectorAll('[data-delete-id]').forEach(btn=>{
       btn.addEventListener('click', ()=> deleteVoucher(btn.dataset.deleteId));
     });
+    const showMoreBtn = document.getElementById('voucherShowMoreBtn');
+    if(showMoreBtn) showMoreBtn.addEventListener('click', ()=>{ voucherShowAllUsed = true; renderVouchersPage(); });
   }
 
   updateTabBadges();
@@ -2067,7 +2089,7 @@ function switchTab(name){
   if(name==='todo'){ resetTodoCalToCurrentMonth(); renderTodoPage(); }
   if(name==='stats') renderStats();
   if(name==='history') renderHistory();
-  if(name==='voucher') renderVouchersPage();
+  if(name==='voucher'){ voucherShowAllUsed = false; renderVouchersPage(); }
   if(name==='settings') renderSettings();
   if(name==='picker') renderPicker();
   if(name==='datamanage'){ renderSyncSettings(); renderNotifyCard(); }
