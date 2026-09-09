@@ -222,6 +222,17 @@ button{font-family:inherit;}
 .section-title{font-size:15px;font-weight:800;margin-bottom:10px;display:flex;align-items:center;gap:6px;}
 
 /* Settings */
+.card.collapsible{padding:0;overflow:hidden;}
+.card-header{
+  display:flex;align-items:center;justify-content:space-between;gap:8px;
+  padding:16px;cursor:pointer;user-select:none;
+}
+.card-header .section-title{margin:0;flex:1;min-width:0;}
+.card-count{font-size:12px;font-weight:700;color:var(--muted);background:#f4f4f4;border-radius:999px;padding:1px 9px;margin-left:4px;}
+.card-chevron{font-size:13px;color:var(--muted);flex-shrink:0;transition:transform .2s ease;}
+.card.collapsible.open .card-chevron{transform:rotate(180deg);}
+.card-body{display:none;padding:0 16px 16px;}
+.card.collapsible.open .card-body{display:block;}
 .list-item{
   display:flex;align-items:center;gap:12px;background:var(--card);
   border-radius:var(--radius);padding:12px 14px;margin-bottom:8px;box-shadow:0 2px 8px rgba(0,0,0,.04);
@@ -353,6 +364,7 @@ button{font-family:inherit;}
   .subject-chip{background:#1f1e26;border-color:#3a3945;color:#fff;}
   .subject-chip.sel{background:#3a2a5c;border-color:#8a63d2;color:#d9c8ff;}
   .icon-btn{background:#1f1e26;}
+  .card-count{background:#1f1e26;}
   .btn-secondary{background:#3a3945;color:#fff;}
   .miss-item{border-color:#3a3945;}
   .emoji-picker button{background:#1f1e26;border-color:#3a3945;}

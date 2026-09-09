@@ -1159,6 +1159,16 @@ function renderHistory(){
 const EMOJI_CHOICES_TASK = ['🪥','🛏️','📚','📖','🧹','🍎','🚿','🧦','🎒','🐶','🥦','⏰','💧','🎹','⚽️','🖍️','💊','🥛','🧮','🍳','🏃','🏀','🔤','🧼','😴','👕','🌱','📺','🎨','🚲'];
 const EMOJI_CHOICES_REWARD = ['🎬','🎡','🧸','🍦','🍕','🎮','🚲','🎪','📱','🏊','🎨','🍭','💵','💰'];
 
+// Card gập/mở ở trang Cài đặt (checklist/to-do/mốc thưởng) — bấm vào tiêu đề để
+// mở/đóng, tránh trang dài lê thê khi có nhiều mục (VD ~20 việc/bé). Trạng thái
+// chỉ là class CSS trên phần tử tĩnh trong index.html (không bị renderSettings()
+// đụng tới), nên tự giữ nguyên qua các lần re-render (thêm/sửa/xoá 1 mục bên
+// trong không làm card tự đóng lại) — chỉ mất khi tải lại trang.
+function toggleSettingsCard(id){
+  const card = document.getElementById(id);
+  if(card) card.classList.toggle('open');
+}
+
 function renderSettings(){
   const p = activeProfile();
   document.getElementById('settingsProfileLabel').textContent = `Đang chỉnh sửa cho: ${p.avatar} ${p.name}`;
@@ -1208,6 +1218,15 @@ function renderSettings(){
       <button class="icon-btn danger" onclick="deleteReward('${r.id}')">🗑️</button>
     </div>
   `).join('') || `<div class="empty-state">Chưa có mốc thưởng nào.</div>`;
+
+  // Số đếm hiện ngay trên tiêu đề card (kể cả khi đang gập lại) — để Bố/Mẹ biết
+  // có bao nhiêu mục mà không cần mở card ra xem.
+  const taskCardCountEl = document.getElementById('taskCardCount');
+  if(taskCardCountEl) taskCardCountEl.textContent = activeTasks.length;
+  const todoCardCountEl = document.getElementById('todoCardCount');
+  if(todoCardCountEl) todoCardCountEl.textContent = activeTodos.length;
+  const rewardCardCountEl = document.getElementById('rewardCardCount');
+  if(rewardCardCountEl) rewardCardCountEl.textContent = p.rewards.length;
 
   const pinBtn = document.getElementById('managePinBtn');
   if(pinBtn){

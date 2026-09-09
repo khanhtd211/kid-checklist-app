@@ -217,22 +217,37 @@
       <button class="add-btn" id="manageDayOffBtn" style="background:#f5a623">🗓️ Quản lý ngày nghỉ</button>
     </div>
 
-    <div class="card">
-      <div class="section-title">📋 Danh sách việc cần làm (checklist, có sao thưởng)</div>
-      <div id="settingsTaskList"></div>
-      <button class="add-btn" id="addTaskBtn">+ Thêm việc</button>
+    <div class="card collapsible" id="cardTaskList">
+      <div class="card-header" onclick="toggleSettingsCard('cardTaskList')">
+        <div class="section-title" style="margin:0">📋 Danh sách việc cần làm <span class="card-count" id="taskCardCount"></span></div>
+        <span class="card-chevron">▾</span>
+      </div>
+      <div class="card-body">
+        <div id="settingsTaskList"></div>
+        <button class="add-btn" id="addTaskBtn">+ Thêm việc</button>
+      </div>
     </div>
 
-    <div class="card">
-      <div class="section-title">🗒️ Danh sách To-do (không bắt buộc)</div>
-      <div id="settingsTodoList"></div>
-      <button class="add-btn" id="addTodoBtn" style="background:#4fa8ff">+ Thêm việc to-do</button>
+    <div class="card collapsible" id="cardTodoList">
+      <div class="card-header" onclick="toggleSettingsCard('cardTodoList')">
+        <div class="section-title" style="margin:0">🗒️ Danh sách To-do <span class="card-count" id="todoCardCount"></span></div>
+        <span class="card-chevron">▾</span>
+      </div>
+      <div class="card-body">
+        <div id="settingsTodoList"></div>
+        <button class="add-btn" id="addTodoBtn" style="background:#4fa8ff">+ Thêm việc to-do</button>
+      </div>
     </div>
 
-    <div class="card">
-      <div class="section-title">🏆 Mốc thưởng theo số sao</div>
-      <div id="settingsRewardList"></div>
-      <button class="add-btn" id="addRewardBtn">+ Thêm mốc thưởng</button>
+    <div class="card collapsible" id="cardRewardList">
+      <div class="card-header" onclick="toggleSettingsCard('cardRewardList')">
+        <div class="section-title" style="margin:0">🏆 Mốc thưởng theo số sao <span class="card-count" id="rewardCardCount"></span></div>
+        <span class="card-chevron">▾</span>
+      </div>
+      <div class="card-body">
+        <div id="settingsRewardList"></div>
+        <button class="add-btn" id="addRewardBtn">+ Thêm mốc thưởng</button>
+      </div>
     </div>
   </div>
 
