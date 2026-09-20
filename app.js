@@ -471,7 +471,7 @@ function renderTodoBadges(p, streak){
 
   const badgeEl = document.getElementById('todoStreakBadge');
   if(streak > 0){
-    badgeEl.textContent = `🔥 ${streak} ngày`;
+    badgeEl.textContent = `🔥 ${streak}`;
     badgeEl.style.display = 'inline-flex';
   } else {
     badgeEl.style.display = 'none';
@@ -480,7 +480,7 @@ function renderTodoBadges(p, streak){
   const freezeEl = document.getElementById('todoFreezeBadge');
   if(freezeEl){
     const count = p.streakFreezes || 0;
-    freezeEl.textContent = `${STREAK_FREEZE_EMOJI} x${count}`;
+    freezeEl.textContent = `${STREAK_FREEZE_EMOJI} ${count}`;
     freezeEl.style.display = count > 0 ? 'inline-flex' : 'none';
   }
 
