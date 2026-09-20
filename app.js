@@ -128,6 +128,9 @@ function newProfile(name, avatar){
                              // note, status:'pending'|'done', createdAt, doneAt }]
     dayOffDates: {},        // { 'YYYY-MM-DD': true } -> ngày nghỉ, không cần checklist/to-do,
                              // không tính sao, không tính streak (xem isDayOff())
+    streakFreezes: 0,       // số vật phẩm "❄️ Đóng băng streak" đang có, mua bằng sao
+    frozenDays: {},         // { 'YYYY-MM-DD': true } -> ngày đã dùng freeze để giữ streak,
+                             // xem applyStreakFreezes()
   };
 }
 function defaultAppData(){
@@ -182,6 +185,8 @@ if(typeof appData.parentPin === 'undefined') appData.parentPin = null;
   if(!Array.isArray(p.todoBadges)) p.todoBadges = [];
   if(!Array.isArray(p.homework)) p.homework = [];
   if(!p.dayOffDates || typeof p.dayOffDates !== 'object') p.dayOffDates = {};
+  if(typeof p.streakFreezes !== 'number' || p.streakFreezes < 0) p.streakFreezes = 0;
+  if(!p.frozenDays || typeof p.frozenDays !== 'object') p.frozenDays = {};
   // Bài tập về nhà không cần theo dõi nhiều tháng: bài nào hạn nộp thuộc THÁNG
   // TRƯỚC (dù đã làm hay chưa) tự động bị dọn khỏi danh sách mỗi khi app mở lại
   // vào tháng mới. Trong cùng 1 tháng, bài quá hạn (đã qua ngày, chưa tick xong)
@@ -347,6 +352,8 @@ function toggleTodo(todoId){
 }
 
 /* ---------- Chuỗi ngày & huy hiệu to-do (thúc đẩy, không liên quan sao) ---------- */
+const STREAK_FREEZE_EMOJI = '❄️';
+const STREAK_FREEZE_COST = 1; // giá cố định: 1 sao / 1 vật phẩm, xem buyStreakFreeze()
 const TODO_STREAK_BADGES = [
   { days:3,   emoji:'🌱', title:'Mầm chăm chỉ' },
   { days:7,   emoji:'🔥', title:'Tuần lễ chăm chỉ' },
@@ -377,6 +384,9 @@ function isTodoDayComplete(dateKey){
   // không cộng cũng không phá streak — tái dùng đúng nhánh xử lý null có sẵn.
   if(isDayOff(dateKey)) return null;
   const p = activeProfile();
+  // Ngày đã dùng ❄️ Đóng băng streak để "cứu" — coi như null (bỏ qua) giống ngày
+  // nghỉ, xem applyStreakFreezes().
+  if(p.frozenDays && p.frozenDays[dateKey]) return null;
   if(p.todoCompleteDays && typeof p.todoCompleteDays[dateKey] === 'boolean'){
     return p.todoCompleteDays[dateKey];
   }
@@ -402,6 +412,35 @@ function calcTodoStreak(){
   }
   return streak;
 }
+// Tự động dùng ❄️ Đóng băng streak cho các ngày gần đây nhất bị bỏ lỡ (chưa hoàn
+// thành hết to-do), miễn còn vật phẩm — mô phỏng cơ chế "streak freeze" của
+// Duolingo. Duyệt lùi từ hôm qua (hôm nay chưa qua nên chưa xét): ngày nghỉ/đã
+// freeze/không có to-do (null) thì bỏ qua và đi tiếp; ngày đã hoàn thành (true)
+// thì dừng luôn (không cần freeze thêm); ngày bị bỏ lỡ (false) thì dùng 1 freeze
+// nếu còn, hết freeze thì dừng (chuỗi sẽ đứt tại đó). Idempotent nhờ frozenDays
+// đánh dấu — gọi lại nhiều lần trong ngày không bị trừ thêm.
+function applyStreakFreezes(){
+  const p = activeProfile();
+  if(!p || !p.streakFreezes) return false;
+  p.frozenDays = p.frozenDays || {};
+  let d = addDays(todayDate(), -1);
+  let usedAny = false;
+  for(let i=0; i<365; i++){
+    const key = toKey(d);
+    if(isDayOff(key) || p.frozenDays[key]){ d = addDays(d, -1); continue; }
+    const status = isTodoDayComplete(key);
+    if(status === null){ d = addDays(d, -1); continue; }
+    if(status === true) break;
+    if(p.streakFreezes <= 0) break;
+    p.frozenDays[key] = true;
+    p.streakFreezes -= 1;
+    usedAny = true;
+    d = addDays(d, -1);
+  }
+  if(usedAny) saveAppData();
+  return usedAny;
+}
+
 function checkTodoBadges(p, streak){
   p.todoBadges = p.todoBadges || [];
   const newlyUnlocked = TODO_STREAK_BADGES.filter(b => streak >= b.days && !p.todoBadges.includes(b.days));
@@ -436,6 +475,13 @@ function renderTodoBadges(p, streak){
     badgeEl.style.display = 'inline-flex';
   } else {
     badgeEl.style.display = 'none';
+  }
+
+  const freezeEl = document.getElementById('todoFreezeBadge');
+  if(freezeEl){
+    const count = p.streakFreezes || 0;
+    freezeEl.textContent = `${STREAK_FREEZE_EMOJI} x${count}`;
+    freezeEl.style.display = count > 0 ? 'inline-flex' : 'none';
   }
 
   const hintEl = document.getElementById('todoBadgeHint');
@@ -997,10 +1043,11 @@ function renderTodoMonthCalendar(){
     const isFuture = d > today && key !== todayKey_;
     const isToday = key === todayKey_;
     const off = isDayOff(key);
-    const done = !isFuture && !off && isTodoDayComplete(key) === true;
-    let cls = 'month-cal-cell' + (isToday ? ' today' : '') + (done ? ' done' : '') + (off ? ' dayoff' : '');
-    const label = off ? 'Ngày nghỉ' : `${pad(d.getDate())}/${pad(month+1)}`;
-    return `<div class="${cls}" data-key="${key}" title="${label}">${off ? '🌴' : (done ? '✅' : d.getDate())}</div>`;
+    const frozen = !off && !!(activeProfile().frozenDays && activeProfile().frozenDays[key]);
+    const done = !isFuture && !off && !frozen && isTodoDayComplete(key) === true;
+    let cls = 'month-cal-cell' + (isToday ? ' today' : '') + (done ? ' done' : '') + (off ? ' dayoff' : '') + (frozen ? ' frozen' : '');
+    const label = off ? 'Ngày nghỉ' : (frozen ? 'Đã dùng ❄️ giữ streak' : `${pad(d.getDate())}/${pad(month+1)}`);
+    return `<div class="${cls}" data-key="${key}" title="${label}">${off ? '🌴' : (frozen ? STREAK_FREEZE_EMOJI : (done ? '✅' : d.getDate()))}</div>`;
   }).join('');
   gridEl.querySelectorAll('[data-key]').forEach(cell=>{
     cell.addEventListener('click', ()=> openTodoDayDetail(cell.dataset.key));
@@ -1544,6 +1591,23 @@ function redeemReward(rewardId){
   celebrateRedeem(p, r);
 }
 
+function buyStreakFreeze(){
+  const p = activeProfile();
+  if(p.stars < STREAK_FREEZE_COST){ alert('Bé chưa đủ sao để mua vật phẩm này!'); return; }
+  if(!confirm(`Xác nhận đổi ${STREAK_FREEZE_COST} sao lấy 1 ${STREAK_FREEZE_EMOJI} Đóng băng streak?`)) return;
+  p.stars -= STREAK_FREEZE_COST;
+  p.streakFreezes = (p.streakFreezes || 0) + 1;
+  addStarHistory(p, { type:'redeem', dateKey: todayKey(), amount: -STREAK_FREEZE_COST, reason: 'Đóng băng streak', emoji: STREAK_FREEZE_EMOJI });
+  saveAppData();
+  renderChildRedeemList();
+  renderAll();
+  showNotifyModal({
+    icon: STREAK_FREEZE_EMOJI,
+    title: 'Đã mua vật phẩm!',
+    html: `${escapeHtml(p.name)} đang có <b>${p.streakFreezes} ${STREAK_FREEZE_EMOJI}</b>.<br><span style="font-size:13px;color:var(--muted)">Lỡ quên làm to-do 1 ngày, hệ thống sẽ tự dùng để giữ streak cho bé.</span>`,
+  });
+}
+
 /* ---------- Đổi thưởng do BÉ tự bấm (không cần mã PIN) ---------- */
 function renderChildRedeemList(){
   const p = activeProfile();
@@ -1552,25 +1616,42 @@ function renderChildRedeemList(){
   const el = document.getElementById('childRedeemList');
   if(!el) return;
   const sorted = [...(p.rewards || [])].sort((a,b)=>a.threshold-b.threshold);
-  if(sorted.length === 0){
-    el.innerHTML = `<div class="empty-state">Chưa có mốc thưởng nào. Nhờ Ba Mẹ vào Cài đặt thêm nhé!</div>`;
-    return;
-  }
-  el.innerHTML = sorted.map(r=>{
-    const eligible = p.stars >= r.threshold;
-    const need = Math.max(0, r.threshold - p.stars);
-    return `
-      <div class="list-item">
-        <div class="emoji">${r.emoji}</div>
-        <div class="info">
-          <div class="t">${escapeHtml(r.title)}</div>
-          <div class="s">${r.threshold} ⭐${eligible ? '' : ` · cần thêm ${need} sao`}</div>
-        </div>
-        <button type="button" class="redeem-btn ${eligible?'':'disabled'}" data-reward-id="${r.id}" ${eligible?'':'disabled'}>Đổi</button>
+
+  // Vật phẩm ❄️ Đóng băng streak: giá + icon cố định, không nằm trong p.rewards
+  // (không sửa/xoá được ở Cài đặt) — luôn ghim ở đầu danh sách đổi thưởng.
+  const freezeEligible = p.stars >= STREAK_FREEZE_COST;
+  const freezeHtml = `
+    <div class="list-item">
+      <div class="emoji">${STREAK_FREEZE_EMOJI}</div>
+      <div class="info">
+        <div class="t">Đóng băng streak</div>
+        <div class="s">${STREAK_FREEZE_COST} ⭐ · đang có ${p.streakFreezes || 0} cái</div>
       </div>
-    `;
-  }).join('');
-  el.querySelectorAll('.redeem-btn:not(.disabled)').forEach(btn=>{
+      <button type="button" class="redeem-btn ${freezeEligible?'':'disabled'}" id="buyStreakFreezeBtn" ${freezeEligible?'':'disabled'}>Đổi</button>
+    </div>
+  `;
+
+  const rewardsHtml = sorted.length === 0
+    ? `<div class="empty-state">Chưa có mốc thưởng nào. Nhờ Ba Mẹ vào Cài đặt thêm nhé!</div>`
+    : sorted.map(r=>{
+      const eligible = p.stars >= r.threshold;
+      const need = Math.max(0, r.threshold - p.stars);
+      return `
+        <div class="list-item">
+          <div class="emoji">${r.emoji}</div>
+          <div class="info">
+            <div class="t">${escapeHtml(r.title)}</div>
+            <div class="s">${r.threshold} ⭐${eligible ? '' : ` · cần thêm ${need} sao`}</div>
+          </div>
+          <button type="button" class="redeem-btn ${eligible?'':'disabled'}" data-reward-id="${r.id}" ${eligible?'':'disabled'}>Đổi</button>
+        </div>
+      `;
+    }).join('');
+
+  el.innerHTML = freezeHtml + rewardsHtml;
+  const freezeBtn = document.getElementById('buyStreakFreezeBtn');
+  if(freezeBtn && !freezeBtn.disabled) freezeBtn.addEventListener('click', buyStreakFreeze);
+  el.querySelectorAll('.redeem-btn[data-reward-id]:not(.disabled)').forEach(btn=>{
     btn.addEventListener('click', ()=> redeemReward(btn.dataset.rewardId));
   });
 }
@@ -2097,6 +2178,7 @@ function switchTab(name){
 
 /* ---------- Init ---------- */
 function renderAll(){
+  applyStreakFreezes();
   renderToday();
   const activePage = document.querySelector('.page.active');
   if(activePage && activePage.id === 'page-homework') renderHomeworkPage();
