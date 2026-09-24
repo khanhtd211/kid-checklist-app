@@ -137,7 +137,12 @@
     </div>
 
     <div class="card">
-      <div class="section-title">📅 Bảng theo dõi tuần</div>
+      <div class="section-title" style="justify-content:space-between">
+        <button type="button" class="icon-btn" id="statsWeekPrevBtn">‹</button>
+        <span id="statsWeekTitle">📅 Bảng theo dõi tuần</span>
+        <button type="button" class="icon-btn" id="statsWeekNextBtn">›</button>
+      </div>
+      <p class="modal-hint" style="margin-top:0">💡 Bấm vào ✅/❌ của ngày trước để Bố/Mẹ sửa lại nếu bé quên tick (cần mã PIN).</p>
       <div style="overflow-x:auto">
         <table class="week-grid">
           <thead><tr id="weekHead"></tr></thead>
@@ -461,6 +466,7 @@
 <div class="overlay" id="todoDayDetailModal">
   <div class="sheet">
     <h3 id="todoDayDetailTitle">Ngày ...</h3>
+    <p class="modal-hint" id="todoDayDetailHint" style="display:none">💡 Bố/Mẹ bấm vào 1 việc để sửa lại nếu bé quên tick (cần mã PIN).</p>
     <div id="todoDayDetailList"></div>
     <div class="sheet-actions">
       <button class="btn-primary" id="todoDayDetailCloseBtn" style="flex:1">Đóng</button>

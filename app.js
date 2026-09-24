@@ -518,33 +518,36 @@ function removeCompleteStarHistory(p, dateKey){
   if(idx > -1) p.starHistory.splice(idx, 1);
 }
 
-// Đối chiếu lại sao của HÔM NAY với tình trạng "đã xong hết việc" HIỆN TẠI —
-// dùng cho cả lúc bé tick/bỏ tick VÀ lúc Bố/Mẹ sửa danh sách việc (thêm/sửa/xoá)
-// trong Cài đặt. Trước đây chỉ toggleTask() mới kiểm tra lại, nên có kẽ hở: bé
-// tự sửa lịch 1 việc để bớt số việc hôm nay, tick hết, được cộng sao — sau đó
-// Bố/Mẹ phát hiện và sửa lại lịch như cũ (KHÔNG qua toggleTask), sao đã cộng sai
-// vẫn còn nguyên vì không có gì đối chiếu lại. Gọi hàm này sau mỗi thay đổi có
-// thể ảnh hưởng tới việc "đã xong hết chưa" để tự thu hồi/cộng lại cho đúng.
-// Trả về 'awarded' | 'revoked' | null.
-function reconcileTodayStar(){
+// Đối chiếu lại sao của 1 NGÀY BẤT KỲ với tình trạng "đã xong hết việc" HIỆN TẠI
+// của ngày đó — dùng cho cả lúc bé tick/bỏ tick hôm nay, lúc Bố/Mẹ sửa danh sách
+// việc (thêm/sửa/xoá) trong Cài đặt, VÀ lúc Bố/Mẹ sửa lại lịch sử ngày cũ (xem
+// toggleTaskForDate()). Trước đây chỉ toggleTask() mới kiểm tra lại, nên có kẽ
+// hở: bé tự sửa lịch 1 việc để bớt số việc hôm nay, tick hết, được cộng sao —
+// sau đó Bố/Mẹ phát hiện và sửa lại lịch như cũ (KHÔNG qua toggleTask), sao đã
+// cộng sai vẫn còn nguyên vì không có gì đối chiếu lại. Gọi hàm này sau mỗi
+// thay đổi có thể ảnh hưởng tới việc "đã xong hết chưa" để tự thu hồi/cộng lại
+// cho đúng. Trả về 'awarded' | 'revoked' | null.
+function reconcileStarForDate(dateKey){
   const p = activeProfile();
-  const key = todayKey();
-  const { done, total } = progressFor(todayDate());
-  const hadStarBefore = !!p.starDays[key];
+  const { done, total } = progressFor(dateFromKey(dateKey));
+  const hadStarBefore = !!p.starDays[dateKey];
   const nowComplete = total > 0 && done === total;
   if(nowComplete && !hadStarBefore){
-    p.starDays[key] = true;
+    p.starDays[dateKey] = true;
     p.stars += 1;
-    addStarHistory(p, { type:'complete', dateKey:key, amount:1, reason:'Hoàn thành hết việc trong ngày', emoji:'✅' });
+    addStarHistory(p, { type:'complete', dateKey, amount:1, reason:'Hoàn thành hết việc trong ngày', emoji:'✅' });
     return 'awarded';
   }
   if(hadStarBefore && !nowComplete){
-    delete p.starDays[key];
+    delete p.starDays[dateKey];
     p.stars = Math.max(0, p.stars - 1);
-    removeCompleteStarHistory(p, key);
+    removeCompleteStarHistory(p, dateKey);
     return 'revoked';
   }
   return null;
+}
+function reconcileTodayStar(){
+  return reconcileStarForDate(todayKey());
 }
 
 function toggleTask(taskId){
@@ -556,6 +559,21 @@ function toggleTask(taskId){
   saveAppData();
   renderAll();
   if(result === 'awarded') celebrate();
+}
+
+// Bố/Mẹ sửa lại checklist của 1 NGÀY CŨ (VD bé quên tick hôm qua) — cần mã PIN,
+// xem requestToggleTaskForDate(). Không hiện modal ăn mừng (celebrate() dùng chữ
+// "hôm nay" nên không hợp khi sửa ngày khác) — chỉ âm thầm cập nhật lại lưới.
+function toggleTaskForDate(taskId, dateKey){
+  const wasDone = isDone(dateKey, taskId);
+  setDone(dateKey, taskId, !wasDone);
+  reconcileStarForDate(dateKey);
+  saveAppData();
+  renderAll();
+}
+function requestToggleTaskForDate(taskId, dateKey){
+  const proceed = () => toggleTaskForDate(taskId, dateKey);
+  if(!appData.parentPin){ openPinSetupModal(proceed); } else { openPinVerifyModal(proceed); }
 }
 
 // Tự động tick các việc trong checklist chính có icon HOMEWORK_LINK_EMOJI (🎒) —
@@ -1061,26 +1079,71 @@ function dateFromKey(key){
 function openTodoDayDetail(key){
   const d = dateFromKey(key);
   const list = todosForDate(d);
+  const isPast = key < todayKey(); // chỉ ngày ĐÃ QUA mới cho Bố/Mẹ sửa lại, không tính hôm nay
   document.getElementById('todoDayDetailTitle').textContent = `📝 ${fmtHuman(d)}`;
+  const hintEl = document.getElementById('todoDayDetailHint');
   const listEl = document.getElementById('todoDayDetailList');
   if(isDayOff(key)){
+    if(hintEl) hintEl.style.display = 'none';
     listEl.innerHTML = `<div class="empty-state" style="padding:12px 0"><span class="big">🌴</span>Ngày nghỉ — bé không cần làm to-do ngày này.</div>`;
     document.getElementById('todoDayDetailModal').classList.add('open');
     return;
   }
+  if(hintEl) hintEl.style.display = (isPast && list.length > 0) ? 'block' : 'none';
   if(list.length === 0){
     listEl.innerHTML = `<div class="empty-state" style="padding:12px 0">Ngày này không có to-do nào.</div>`;
   } else {
     listEl.innerHTML = list.map(t=>{
       const done = isTodoDone(key, t.id);
-      return `<div class="task todo-item ${done?'done':''}" style="cursor:default">
+      return `<div class="task todo-item ${done?'done':''}" data-todo-id="${t.id}" style="cursor:${isPast?'pointer':'default'}">
         <div class="emoji">${t.emoji}</div>
         <div class="title ${done?'strike':''}">${escapeHtml(t.title)}</div>
         <div class="checkbox todo-checkbox ${done?'checked':''}">${done?'✓':''}</div>
       </div>`;
     }).join('');
+    if(isPast){
+      listEl.querySelectorAll('[data-todo-id]').forEach(row=>{
+        row.addEventListener('click', ()=> requestToggleTodoForDate(row.dataset.todoId, key));
+      });
+    }
   }
   document.getElementById('todoDayDetailModal').classList.add('open');
+}
+
+// Bố/Mẹ sửa lại to-do của 1 NGÀY CŨ (VD bé quên tick hôm qua) — cần mã PIN.
+// Sửa ngày cũ có thể ảnh hưởng chuỗi/huy hiệu hiện tại nên tính lại đầy đủ,
+// giống hệt luồng toggleTodo() của hôm nay.
+function toggleTodoForDate(todoId, dateKey){
+  const p = activeProfile();
+  const wasDone = isTodoDone(dateKey, todoId);
+  setTodoDone(dateKey, todoId, !wasDone);
+  lockTodoDayComplete(dateKey);
+  // Nếu sửa xong khiến ngày này tự nó đã hoàn thành hết to-do, không cần dùng ❄️
+  // để "cứu" ngày đó nữa — hoàn lại vật phẩm cho bé.
+  if(p.frozenDays && p.frozenDays[dateKey] && p.todoCompleteDays[dateKey] === true){
+    delete p.frozenDays[dateKey];
+    p.streakFreezes = (p.streakFreezes || 0) + 1;
+  }
+  saveAppData();
+  checkTodoBadges(p, calcTodoStreak());
+  applyStreakFreezes();
+  openTodoDayDetail(dateKey);
+  renderAll();
+}
+function requestToggleTodoForDate(todoId, dateKey){
+  const proceed = () => toggleTodoForDate(todoId, dateKey);
+  if(!appData.parentPin){ openPinSetupModal(proceed); } else { openPinVerifyModal(proceed); }
+}
+
+// Tuần đang xem ở Bảng theo dõi tuần (Stats) — lệch so với tuần hiện tại theo
+// SỐ TUẦN (0 = tuần này, -1 = tuần trước...). Cùng pattern với todoCalViewYear/
+// Month: chỉ reset về tuần hiện tại lúc CHUYỂN VÀO trang Stats (switchTab()),
+// không reset mỗi lần renderStats() chạy lại.
+let statsWeekOffset = 0;
+function resetStatsWeekToCurrent(){ statsWeekOffset = 0; }
+function shiftStatsWeek(delta){
+  statsWeekOffset = Math.min(0, statsWeekOffset + delta); // không cho xem tuần tương lai
+  renderStats();
 }
 
 /* ---------- Render: Stats ---------- */
@@ -1088,8 +1151,14 @@ function renderStats(){
   const p = activeProfile();
   document.getElementById('statsProfileName').textContent = `Thống kê tuần của ${p.name} ${p.avatar}`;
   const today = todayDate();
-  const weekStart = startOfWeek(today);
+  const weekStart = startOfWeek(addDays(today, statsWeekOffset * 7));
   const weekDays = [0,1,2,3,4,5,6].map(i => addDays(weekStart, i));
+  const todayKey_ = todayKey();
+
+  document.getElementById('statsWeekTitle').textContent =
+    `📅 ${pad(weekDays[0].getDate())}/${pad(weekDays[0].getMonth()+1)} - ${pad(weekDays[6].getDate())}/${pad(weekDays[6].getMonth()+1)}`;
+  const nextBtn = document.getElementById('statsWeekNextBtn');
+  if(nextBtn) nextBtn.disabled = statsWeekOffset === 0; // không cho xem tuần tương lai (chưa có dữ liệu)
 
   // Week grid
   const theadRow = document.getElementById('weekHead');
@@ -1104,22 +1173,32 @@ function renderStats(){
       const wd = weekdayOf(d);
       const key = toKey(d);
       const isFuture = d > today;
+      const scheduled = t.days.includes(wd);
+      const off = isDayOff(key);
+      // Chỉ cho Bố/Mẹ sửa lại NGÀY ĐÃ QUA (không phải hôm nay — hôm nay bé tự
+      // tick ở tab Checklist như bình thường, không cần PIN).
+      const editable = !off && scheduled && !isFuture && key !== todayKey_;
       let mark = '';
-      if(isDayOff(key)){
+      if(off){
         mark = '<span class="mark" title="Ngày nghỉ">🌴</span>';
-      } else if(!t.days.includes(wd)){
+      } else if(!scheduled){
         mark = '<span class="mark" style="color:#ccc">–</span>';
-      } else if(isFuture && key !== todayKey()){
+      } else if(isFuture && key !== todayKey_){
         mark = '<span class="mark" style="color:#ddd">·</span>';
       } else if(isDone(key, t.id)){
         mark = '<span class="mark">✅</span>';
       } else {
         mark = '<span class="mark">❌</span>';
       }
-      cells += `<td>${mark}</td>`;
+      cells += editable
+        ? `<td class="editable-cell" data-task-id="${t.id}" data-date-key="${key}">${mark}</td>`
+        : `<td>${mark}</td>`;
     });
     tr.innerHTML = cells;
     tbody.appendChild(tr);
+  });
+  tbody.querySelectorAll('.editable-cell').forEach(td=>{
+    td.addEventListener('click', ()=> requestToggleTaskForDate(td.dataset.taskId, td.dataset.dateKey));
   });
 
   // Missed days this week (days up to today with total>0 and done<total)
@@ -2168,7 +2247,7 @@ function switchTab(name){
   if(name==='today') renderToday();
   if(name==='homework') renderHomeworkPage();
   if(name==='todo'){ resetTodoCalToCurrentMonth(); renderTodoPage(); }
-  if(name==='stats') renderStats();
+  if(name==='stats'){ resetStatsWeekToCurrent(); renderStats(); }
   if(name==='history') renderHistory();
   if(name==='voucher'){ voucherShowAllUsed = false; renderVouchersPage(); }
   if(name==='settings') renderSettings();
@@ -2692,6 +2771,8 @@ document.addEventListener('DOMContentLoaded', ()=>{
   // Lịch theo dõi to-do — lùi/tiến xem tháng trước/sau
   document.getElementById('todoCalPrevBtn').addEventListener('click', ()=> shiftTodoCalMonth(-1));
   document.getElementById('todoCalNextBtn').addEventListener('click', ()=> shiftTodoCalMonth(1));
+  document.getElementById('statsWeekPrevBtn').addEventListener('click', ()=> shiftStatsWeek(-1));
+  document.getElementById('statsWeekNextBtn').addEventListener('click', ()=> shiftStatsWeek(1));
 
   document.getElementById('managePinBtn').addEventListener('click', ()=>{
     if(appData.parentPin){
