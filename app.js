@@ -1506,6 +1506,14 @@ function importDataFile(file){
 
 /* ---------- Parent PIN ---------- */
 let pinSuccessCallback = null;
+// Sau khi Bố/Mẹ nhập đúng PIN 1 lần, coi như đang trong "phiên làm việc của
+// Bố/Mẹ" trong PARENT_SESSION_MS tiếp theo — các hành động cần PIN khác trong
+// lúc này không hỏi lại nữa (VD sửa liên tiếp nhiều việc/nhiều ngày ở Bảng theo
+// dõi tuần). Mỗi lần dùng lại phiên này sẽ tự gia hạn thêm (sliding), hết hạn
+// nếu ngừng thao tác quá lâu — chỉ lưu trong bộ nhớ (biến JS), không lưu
+// localStorage, nên tự hết khi tải lại trang/đóng app.
+const PARENT_SESSION_MS = 180000; // 3 phút
+let parentSessionUntil = 0;
 
 function openPinSetupModal(onSuccess){
   pinSuccessCallback = onSuccess || null;
@@ -1527,6 +1535,7 @@ function savePinSetup(){
   if(pin1 !== pin2){ err.textContent = 'Hai mã PIN không khớp, nhập lại nhé.'; return; }
   appData.parentPin = pin1;
   saveAppData();
+  parentSessionUntil = Date.now() + PARENT_SESSION_MS;
   document.getElementById('pinSetupModal').classList.remove('open');
   renderSettings();
   const cb = pinSuccessCallback; pinSuccessCallback = null;
@@ -1534,6 +1543,13 @@ function savePinSetup(){
 }
 
 function openPinVerifyModal(onSuccess){
+  // Còn trong phiên làm việc của Bố/Mẹ (đã nhập đúng PIN gần đây) — khỏi hỏi lại,
+  // đồng thời gia hạn thêm PARENT_SESSION_MS kể từ bây giờ.
+  if(Date.now() < parentSessionUntil){
+    parentSessionUntil = Date.now() + PARENT_SESSION_MS;
+    if(onSuccess) onSuccess();
+    return;
+  }
   pinSuccessCallback = onSuccess || null;
   document.getElementById('pinVerifyInput').value = '';
   document.getElementById('pinVerifyError').textContent = '';
@@ -1554,6 +1570,7 @@ function submitPinVerify(){
     return;
   }
   document.getElementById('pinVerifyModal').classList.remove('open');
+  parentSessionUntil = Date.now() + PARENT_SESSION_MS;
   const cb = pinSuccessCallback; pinSuccessCallback = null;
   if(cb) cb();
 }
