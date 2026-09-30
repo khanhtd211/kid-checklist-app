@@ -7,11 +7,10 @@ const DAY_NAMES_FULL = ['Chủ nhật','Thứ 2','Thứ 3','Thứ 4','Thứ 5','
 // xem renderEmojiPicker()). Mỗi màn hình cấu hình chỉ hiện các chủ đề hợp với nó
 // (EMOJI_SETS). Thêm icon mới: chỉ cần bổ sung vào đúng chủ đề ở đây.
 const EMOJI_CATALOG = {
-  hygiene:{ name:'Vệ sinh',     icon:'🧼', emojis:['🪥','🦷','🚿','🛁','🧼','🧴','🫧','🪮','💇','💅','🧻','🚽','😷','🤧'] },
   chores: { name:'Việc nhà',    icon:'🧹', emojis:['🛏️','🧹','🧺','👕','🧦','👟','🍽️','🧽','🗑️','📦','🧸','🪴','🌱','🐶','🐱','🐟'] },
   study:  { name:'Học tập',     icon:'📚', emojis:['📚','📖','📓','✏️','🖊️','📝','🎒','🧮','🔢','🔤','📐','🌍','🔬','🧪','💻','🗣️'] },
-  food:   { name:'Ăn uống',     icon:'🍎', emojis:['🍎','🍌','🍊','🍇','🍓','🥦','🥕','🥗','🍚','🍳','🥣','🥛','💧','💊'] },
-  habit:  { name:'Nề nếp',      icon:'⏰', emojis:['⏰','☀️','🌙','😴','🙏','👋','🤝','❤️','🎯','⭐️','🧘','📵','📺','🚸'] },
+  // "Khác": chủ yếu việc to-do lặt vặt hằng ngày — uống thuốc, uống sữa, ngủ sớm, luyện tập...
+  other:  { name:'Khác',        icon:'💊', emojis:['💊','🥛','💧','🍎','🥦','🍳','⏰','😴','🌙','📵','📺','🏃','🤸','🧘','🚲','⚽️','🎹','🎨','🧩','🙏','❤️','🎯','⭐️'] },
   sport:  { name:'Vận động',    icon:'⚽️', emojis:['🏃','⚽️','🏀','🏐','🏸','🎾','🏓','🏊','🚴','🚲','🛹','⛸️','🤸','🧗','🥋','🩰','⛹️'] },
   talent: { name:'Năng khiếu',  icon:'🎨', emojis:['🎹','🎸','🎻','🥁','🎤','🎼','🎨','🖍️','🖌️','✂️','🎭','🧩','♟️','📷'] },
   fun:    { name:'Giải trí',    icon:'🎮', emojis:['🎮','📺','🎬','🍿','🎧','📱','🧸','🪀','🎲','🪁','🛝','🎈'] },
@@ -23,7 +22,7 @@ const EMOJI_CATALOG = {
   funny:  { name:'Vui nhộn',    icon:'🤖', emojis:['🤖','👽','👻','🎃','⛄️','🌈','🚀','🌟','🍀','🌻'] },
 };
 const EMOJI_SETS = {
-  task:   ['hygiene','chores','study','food','habit','sport','talent','fun'],
+  task:   ['study','chores','other'],
   cls:    ['study','talent','sport'],
   reward: ['fun','treat','outing','money','sport','talent','study'],
   avatar: ['kids','animals','funny'],
