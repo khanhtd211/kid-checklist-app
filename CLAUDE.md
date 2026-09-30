@@ -23,11 +23,14 @@ cài vào Home Screen như app native).
     `sw.js` — đây là config public phía client, không phải secret.
 - **Service Worker** (`sw.js`) — cache offline + nhận push notification khi app
   đã đóng.
-- **GitHub Actions** — cron job gửi push notification 2 khung giờ/ngày (chiều
-  15h-17h, tối 19h-20h giờ VN), chạy script Node dùng `firebase-admin` (cần
-  secret `FIREBASE_SERVICE_ACCOUNT`, không có trong repo).
-- **Hosting**: khả năng deploy qua GitHub Pages (dự trên cấu trúc file tĩnh +
-  service worker dùng đường dẫn tương đối `./`).
+- **GitHub Actions** — workflow gửi push notification nhắc checklist + bài tập
+  (khung cuối tuần 10-11h, chiều 15h-17h, tối 19h-20h giờ VN), chạy script Node
+  dùng `firebase-admin` (cần secret `FIREBASE_SERVICE_ACCOUNT`, không có trong
+  repo). Trigger bằng **cron-job.org** gọi `workflow_dispatch` (không dùng
+  `on.schedule` của GitHub vì hay bị bỏ lịch).
+- **Hosting**: GitHub Pages (file tĩnh + service worker dùng đường dẫn tương đối
+  `./`). Đã cân nhắc và **chốt giữ GitHub Pages** (xem PROGRESS.md).
+- **Font**: Nunito từ Google Fonts (link trong `<head>` của `index.html`).
 
 ## Cấu trúc thư mục chính
 
@@ -37,9 +40,11 @@ index.html                     Toàn bộ UI: các "page" chính trong tabbar (t
                                 trong tabbar, mở qua nút riêng (history — bấm vào
                                 nút sao #statsStars ở đầu trang stats; datamanage —
                                 mở từ nút ở trang settings) + picker + tất cả modal
-app.js                         Toàn bộ logic JS (~2000 dòng, 1 file, không module)
-style.css                      Style, dùng CSS variables (--pink, --green...) +
-                                dark mode qua @media (prefers-color-scheme: dark)
+app.js                         Toàn bộ logic JS (~3000 dòng, 1 file, không module)
+style.css                      Style theme trẻ em, dùng CSS variables (--pink,
+                                --green, --shadow, --line...). Giao diện tối nằm
+                                dưới [data-theme="dark"] (KHÔNG dùng @media
+                                prefers-color-scheme) — bật qua Cài đặt → Giao diện
 sw.js                          Service worker — nhớ bump CACHE_NAME mỗi khi sửa
                                 core files (xem mục Quy ước bên dưới)
 manifest.json                  PWA manifest (tên app, icon, theme color...)
@@ -77,6 +82,13 @@ icons/                         Icon app (icon-192, icon-512, apple-touch-icon)
   không dùng `<dialog>` native. Emoji picker, day-picker (Thứ trong tuần), và
   lịch chọn ngày (`month-cal-grid`) đều là component tái dùng nhiều chỗ
   (settings task/todo, todo streak calendar, date picker cho lịch "1 lần").
+- **Emoji picker**: `renderEmojiPicker(containerId, setKey, selected,
+  hiddenInputId, onPick)` vẽ 1 nút, bấm mở bảng chọn dùng chung
+  `#emojiPickerModal`. Thêm/bớt icon → sửa `EMOJI_CATALOG` (chủ đề) và
+  `EMOJI_SETS` (màn hình nào hiện chủ đề nào) ở đầu `app.js`.
+- **Theme Sáng/Tối**: mỗi màu sáng hardcode mới thêm vào CSS cần có override
+  tương ứng trong khối `[data-theme="dark"]` cuối `style.css`. Lựa chọn theme
+  lưu per-device ở localStorage `kidChecklistTheme`, không nằm trong `appData`.
 - **Tránh input native khi cần custom validation**: KHÔNG dùng
   `<input type="date">` — iOS Safari có bug không tự khoá ngày quá khứ trên
   wheel picker theo `min`. App đã có sẵn component lịch dạng lưới custom
@@ -109,8 +121,11 @@ icons/                         Icon app (icon-192, icon-512, apple-touch-icon)
 
 ## Ghi chú môi trường đa máy
 
-- Máy hiện tại: **Windows** (path dạng `C:\Users\User\Downloads\Claude\kid-checklist`).
-- `python` mặc định trên Windows này là alias Microsoft Store (không chạy
+- Có ít nhất 2 máy làm việc:
+  - **Mac** (path `/Users/senprints/Claude/kid-checklist-app`): dùng `python3`
+    có sẵn. Có `.claude/launch.json` để chạy local server port 8080 qua preview.
+  - **Windows** (path dạng `C:\Users\User\Downloads\Claude\kid-checklist`).
+- `python` mặc định trên Windows là alias Microsoft Store (không chạy
   được nếu chưa cài Python thật). Python thật nằm ở:
   `C:\Users\User\AppData\Local\Programs\Python\Python314\python.exe` — cần
   gọi full path này nếu alias `python`/`python3` báo "not found".

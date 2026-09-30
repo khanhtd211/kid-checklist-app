@@ -5,7 +5,40 @@
 
 ## Đã hoàn thành
 
-_(tính đến 30/08/2026)_
+_(tính đến 30/09/2026)_
+
+- **[30/09/2026] Giao diện mới phong cách trẻ em** (`a1dd98a`): nền kem hoạ tiết
+  pastel chấm bi, font Nunito (Google Fonts, có tiếng Việt), thẻ việc màu pastel
+  xoay vòng theo `nth-child(5n+…)` + bóng 3D bấm lún, ô tick hiệu ứng nảy, thanh
+  tiến độ sọc kẹo, tabbar nổi bo tròn, nút 3D. Biến CSS mới: `--shadow`, `--line`,
+  `--pink-dark`, `--green-dark`, `--blue`, `--purple`.
+- **[30/09/2026] Nút chuyển giao diện Sáng / Tối / Theo máy** (`01c4f2c`) ở Cài đặt →
+  🎨 Giao diện. Mặc định Sáng. Lưu riêng từng máy ở localStorage `kidChecklistTheme`
+  (không nằm trong `appData`, không sync Firebase). Script nhỏ trong `<head>` áp theme
+  trước khi vẽ trang (tránh nháy); logic đầy đủ `applyTheme()/setThemePref()` trong
+  `app.js`, chế độ "Theo máy" nghe `matchMedia` change. Giao diện tối mới viết lại
+  dưới `[data-theme="dark"]` (kiểu bầu trời đêm), bỏ hẳn `@media (prefers-color-scheme)`.
+- **[30/09/2026] Bộ chọn biểu tượng dạng nút + bảng chọn theo chủ đề** (`01c4f2c`,
+  `e6c852d`): form chỉ còn 1 nút "Đổi biểu tượng ›", bấm mở `#emojiPickerModal` (dùng
+  chung) có tab chủ đề. Kho icon gom về `EMOJI_CATALOG` + `EMOJI_SETS` ở đầu `app.js`;
+  `renderEmojiPicker(containerId, setKey, selected, hiddenInputId, onPick)`.
+  Việc/To-do chỉ còn 3 tab: **Học tập → Việc nhà → Khác** (bỏ Vệ sinh, Ăn uống, Nề
+  nếp theo yêu cầu — bé 8-11 tuổi). Icon 🎒 tự tick bài tập vẫn hoạt động qua `onPick`.
+- **[30/09/2026] Bỏ nhắc đưa/đón lịch học thêm qua notification** (`efe76bc`):
+  `send-reminders.js` khôi phục về bản trước `43d2042`. Phần cấu hình + hiển thị
+  lịch học thêm trong app giữ nguyên.
+- **[03/09 → 30/09/2026] Ghi bù các commit chưa log** (chi tiết xem git log):
+  - `43d2042` Lịch học thêm: cấu hình ở Cài đặt, tab "Bài tập" đổi thành "🗓️ Lịch
+    học" (tổng hợp tuần + bài tập), widget hôm nay/ngày mai ở trang Hôm nay.
+  - `761380a` Phiên PIN Bố/Mẹ 180s — khỏi nhập lại PIN khi sửa liên tiếp.
+  - `73f4968` Bố/Mẹ sửa lại checklist/to-do ngày cũ khi bé quên tick (cần PIN).
+  - `4089b84` Vật phẩm ❄️ Đóng băng streak (đổi sao, tự dùng khi lỡ quên to-do 1
+    ngày); `29c8f78`/`fb4da77` gọn badge 🔥/❄️ cùng 1 dòng.
+  - `d751fc4` "Phiếu đã dùng" mặc định chỉ hiện 30 ngày; `6d2b694` card gập/mở ở
+    Cài đặt; `a71d8f8` nút lùi/tiến tháng ở lịch to-do.
+  - `9351393` Fix mất phiếu quà do race-condition khi sync nhiều máy; `9a02456` fix
+    badge tab Bài tập đếm dư; `7646aaa` fix chỉ gửi được 1/3 noti/ngày.
+
 
 - **[30/08/2026]** Tính năng mới **"🌴 Ngày nghỉ"**: Bố/Mẹ đánh dấu 1 ngày là
   ngày nghỉ (cần mã PIN) qua modal lịch tháng ở Cài đặt — xác nhận PIN 1 LẦN
@@ -284,12 +317,21 @@ _(tính đến 30/08/2026)_
 
 ## Đang làm dở
 
-_(không có việc dở dang tại thời điểm ghi — phiên 30/08/2026 đã hoàn tất
-tính năng "Ngày nghỉ" + fix hint huy hiệu to-do, đã push lên GitHub, verify
-bằng browser test thật, chưa nhận phản hồi test trên điện thoại thật từ
-user)_
+_(30/09/2026: không có việc dở dang — mọi thay đổi phiên này đã push, verify
+bằng browser pane giả lập iPhone; chờ user test trên điện thoại thật)_
 
 ## Quyết định kỹ thuật quan trọng
+
+- **[30/09/2026] Giữ GitHub Pages, không chuyển Firebase Hosting/Vercel.** Lý do:
+  app tĩnh, Pages đủ dùng; đổi domain sẽ mất `localStorage` trên máy chưa bật sync,
+  phải cài lại icon Home Screen và đăng ký lại FCM token. Nếu sau này muốn đồng bộ
+  với các app khác, Firebase Hosting là lựa chọn hợp nhất (đã dùng Firestore/FCM).
+- **[30/09/2026] Theme lưu per-device, mặc định Sáng, không theo Dark Mode hệ thống.**
+  Lý do: app bị tối trên máy user chỉ vì iPhone bật Dark Mode; máy bé và máy Bố/Mẹ có
+  thể muốn khác nhau nên không đưa vào `appData`/sync.
+- **[30/09/2026] Không làm nhắc lịch học thêm qua cron.** Lý do: widget ở trang Hôm
+  nay đã đủ theo dõi; cron-job.org chỉ gọi theo vài khung giờ nên nhắc đưa/đón không
+  chính xác được nếu không tăng tần suất gọi.
 
 - **[30/08/2026] Câu động viên ngày nghỉ chọn theo hash(ngày), không phải
   Math.random() thật mỗi lần render.** Lý do: `renderToday()`/
@@ -353,6 +395,15 @@ user)_
   không ép `cache:'no-store'` ở tầng `fetch()`.
 
 ## Việc tồn đọng / Next steps
+
+- **[30/09/2026] Cần user test trên điện thoại thật:** giao diện mới (sáng + tối),
+  nút chuyển theme, bộ chọn icon ở các form **chưa bấm thử trên máy**: to-do, lịch
+  học thêm, mốc thưởng, tặng phiếu quà, avatar hồ sơ bé (mới test form Việc cần làm).
+- Việc cũ đang dùng icon đã bỏ khỏi kho (VD 🪥) vẫn hiển thị bình thường, chỉ không
+  chọn lại được — không cần migrate.
+- Font Nunito tải từ Google Fonts: offline lần đầu sẽ fallback font hệ thống (SW có
+  cache lại sau lần tải đầu).
+- Nên thêm `.DS_Store` vào `.gitignore`.
 
 - **Cần user test tính năng "Ngày nghỉ" trên điện thoại thật** (mới verify
   bằng browser test — PIN, lịch tháng đánh dấu/bỏ đánh dấu, thu hồi sao,
