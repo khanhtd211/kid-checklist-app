@@ -3,7 +3,35 @@ const STORAGE_KEY = 'kidChecklistData_v2';
 const LEGACY_KEY = 'kidChecklistData_v1';
 const DAY_NAMES = ['CN','T2','T3','T4','T5','T6','T7'];
 const DAY_NAMES_FULL = ['Chủ nhật','Thứ 2','Thứ 3','Thứ 4','Thứ 5','Thứ 6','Thứ 7'];
-const AVATAR_CHOICES = ['🧒','👦','👧','👶','🐱','🐶','🦁','🐰','🦄','🐻','🐼','🦊','🐸','🐵','🐹','🐨','🐷','🦖','🦕','🐙','🦋','🐢','🤖','🥷'];
+// Kho biểu tượng chia theo chủ đề — dùng cho bộ chọn icon (nút bấm → mở bảng chọn,
+// xem renderEmojiPicker()). Mỗi màn hình cấu hình chỉ hiện các chủ đề hợp với nó
+// (EMOJI_SETS). Thêm icon mới: chỉ cần bổ sung vào đúng chủ đề ở đây.
+const EMOJI_CATALOG = {
+  hygiene:{ name:'Vệ sinh',     icon:'🧼', emojis:['🪥','🦷','🚿','🛁','🧼','🧴','🫧','🪮','💇','💅','🧻','🚽','😷','🤧'] },
+  chores: { name:'Việc nhà',    icon:'🧹', emojis:['🛏️','🧹','🧺','👕','🧦','👟','🍽️','🧽','🗑️','📦','🧸','🪴','🌱','🐶','🐱','🐟'] },
+  study:  { name:'Học tập',     icon:'📚', emojis:['📚','📖','📓','✏️','🖊️','📝','🎒','🧮','🔢','🔤','📐','🌍','🔬','🧪','💻','🗣️'] },
+  food:   { name:'Ăn uống',     icon:'🍎', emojis:['🍎','🍌','🍊','🍇','🍓','🥦','🥕','🥗','🍚','🍳','🥣','🥛','💧','💊'] },
+  habit:  { name:'Nề nếp',      icon:'⏰', emojis:['⏰','☀️','🌙','😴','🙏','👋','🤝','❤️','🎯','⭐️','🧘','📵','📺','🚸'] },
+  sport:  { name:'Vận động',    icon:'⚽️', emojis:['🏃','⚽️','🏀','🏐','🏸','🎾','🏓','🏊','🚴','🚲','🛹','⛸️','🤸','🧗','🥋','🩰','⛹️'] },
+  talent: { name:'Năng khiếu',  icon:'🎨', emojis:['🎹','🎸','🎻','🥁','🎤','🎼','🎨','🖍️','🖌️','✂️','🎭','🧩','♟️','📷'] },
+  fun:    { name:'Giải trí',    icon:'🎮', emojis:['🎮','📺','🎬','🍿','🎧','📱','🧸','🪀','🎲','🪁','🛝','🎈'] },
+  treat:  { name:'Món ngon',    icon:'🍦', emojis:['🍦','🍭','🍬','🍫','🍩','🧁','🍰','🍕','🍔','🍟','🥤','🧋'] },
+  outing: { name:'Đi chơi',     icon:'🎡', emojis:['🎡','🎢','🎠','🎪','🏖️','🏕️','🏞️','🦁','🛍️','🚗','✈️','🎟️'] },
+  money:  { name:'Tiền & quà',  icon:'🎁', emojis:['🎁','💵','💰','🪙','🏆','🎖️','🌟','🎀'] },
+  kids:   { name:'Bé',          icon:'🧒', emojis:['🧒','👦','👧','👶','🧑','👸','🤴','🧚','🧜','🦸','🦹','🥷','🧙','🎅'] },
+  animals:{ name:'Con vật',     icon:'🐶', emojis:['🐱','🐶','🦁','🐯','🐰','🦄','🐻','🐼','🐨','🦊','🐸','🐵','🐹','🐷','🐮','🐧','🐤','🦉','🐢','🐙','🦋','🐳','🐬','🦈','🦖','🦕'] },
+  funny:  { name:'Vui nhộn',    icon:'🤖', emojis:['🤖','👽','👻','🎃','⛄️','🌈','🚀','🌟','🍀','🌻'] },
+};
+const EMOJI_SETS = {
+  task:   ['hygiene','chores','study','food','habit','sport','talent','fun'],
+  cls:    ['study','talent','sport'],
+  reward: ['fun','treat','outing','money','sport','talent','study'],
+  avatar: ['kids','animals','funny'],
+};
+function flattenEmojiSet(setKey){
+  return [...new Set(EMOJI_SETS[setKey].flatMap(k => EMOJI_CATALOG[k].emojis))];
+}
+const AVATAR_CHOICES = flattenEmojiSet('avatar');
 // Icon "đặc biệt" trong bộ chọn biểu tượng của checklist chính: chọn icon này cho
 // 1 việc bất kỳ (không cần đúng tên) sẽ tự động tick việc đó khi bé ghi bài tập về
 // nhà trong ngày — xem autoTickHomeworkLinkedTasks(). Dùng thẳng emoji làm "công
@@ -1343,9 +1371,9 @@ function renderHistory(){
 }
 
 /* ---------- Render: Settings ---------- */
-const EMOJI_CHOICES_TASK = ['🪥','🛏️','📚','📖','🧹','🍎','🚿','🧦','🎒','🐶','🥦','⏰','💧','🎹','⚽️','🖍️','💊','🥛','🧮','🍳','🏃','🏀','🔤','🧼','😴','👕','🌱','📺','🎨','🚲'];
-const EMOJI_CHOICES_CLASS = ['📖','✏️','🧮','🎹','🎨','🖌️','⚽️','🏊','🥋','🩰','🎭','🎻','🚴','🔤','🧩','⛹️'];
-const EMOJI_CHOICES_REWARD = ['🎬','🎡','🧸','🍦','🍕','🎮','🚲','🎪','📱','🏊','🎨','🍭','💵','💰'];
+const EMOJI_CHOICES_TASK = flattenEmojiSet('task');
+const EMOJI_CHOICES_CLASS = flattenEmojiSet('cls');
+const EMOJI_CHOICES_REWARD = flattenEmojiSet('reward');
 
 // Card gập/mở ở trang Cài đặt (checklist/to-do/mốc thưởng) — bấm vào tiêu đề để
 // mở/đóng, tránh trang dài lê thê khi có nhiều mục (VD ~20 việc/bé). Trạng thái
@@ -1887,10 +1915,10 @@ function requestRefundVoucher(voucherId){
 }
 
 /* ---------- Tặng phiếu quà trực tiếp (không tốn sao) ---------- */
-const EMOJI_CHOICES_VOUCHER = ['🎮','📖','🎬','🍦','🍿','🎨','⚽','🎧','🧩','🍕','🚲','🎪','💵','💰'];
+const EMOJI_CHOICES_VOUCHER = EMOJI_CHOICES_REWARD;
 function openGiftVoucherModal(){
   document.getElementById('giftVoucherTitleInput').value = '';
-  renderEmojiPicker('giftVoucherEmojiPicker', EMOJI_CHOICES_VOUCHER, EMOJI_CHOICES_VOUCHER[0], 'giftVoucherEmojiInput');
+  renderEmojiPicker('giftVoucherEmojiPicker', 'reward', EMOJI_CHOICES_VOUCHER[0], 'giftVoucherEmojiInput');
   document.getElementById('giftVoucherEmojiInput').value = EMOJI_CHOICES_VOUCHER[0];
   document.getElementById('giftVoucherModal').classList.add('open');
 }
@@ -2073,20 +2101,17 @@ function openTaskModal(id){
   const t = id ? p.tasks.find(x=>x.id===id) : { title:'', emoji:EMOJI_CHOICES_TASK[0], days:[0,1,2,3,4,5,6] };
   document.getElementById('taskModalTitle').textContent = id ? 'Sửa việc' : 'Thêm việc mới';
   document.getElementById('taskTitleInput').value = t.title;
-  renderEmojiPicker('taskEmojiPicker', EMOJI_CHOICES_TASK, t.emoji, 'taskEmojiInput');
-  document.getElementById('taskEmojiInput').value = t.emoji;
   // Emoji picker của Việc có thêm xử lý riêng cho icon "đặc biệt" 🎒 (xem
   // HOMEWORK_LINK_EMOJI): cập nhật hint + điền sẵn tên việc chuẩn — nhưng CHỈ khi
   // bé/phụ huynh chủ động BẤM CHỌN icon này (không đụng vào tên việc khi chỉ mở
   // modal sửa 1 việc đã có sẵn icon 🎒 từ trước, tránh ghi đè tên đã đặt).
-  document.querySelectorAll('#taskEmojiPicker button').forEach(btn=>{
-    btn.addEventListener('click', ()=>{
-      updateTaskHomeworkLinkHint();
-      if(btn.dataset.emoji === HOMEWORK_LINK_EMOJI){
-        document.getElementById('taskTitleInput').value = HOMEWORK_LINK_TASK_TITLE;
-      }
-    });
+  renderEmojiPicker('taskEmojiPicker', 'task', t.emoji, 'taskEmojiInput', (emoji)=>{
+    updateTaskHomeworkLinkHint();
+    if(emoji === HOMEWORK_LINK_EMOJI){
+      document.getElementById('taskTitleInput').value = HOMEWORK_LINK_TASK_TITLE;
+    }
   });
+  document.getElementById('taskEmojiInput').value = t.emoji;
   updateTaskHomeworkLinkHint();
   renderDaysPicker(t.days && t.days.length ? t.days : [0,1,2,3,4,5,6]);
   setOnceDateValue('taskOnceDateInput', 'taskOnceDateBtn', t.onceDate || todayKey());
@@ -2106,16 +2131,60 @@ function renderDaysPicker(selectedDays, containerId){
     chip.addEventListener('click', ()=> chip.classList.toggle('on'));
   });
 }
-function renderEmojiPicker(containerId, choices, selected, hiddenInputId){
+// Bộ chọn biểu tượng: trong form chỉ hiện 1 nút (icon đang chọn + "Đổi biểu
+// tượng"), bấm vào mở bảng chọn #emojiPickerModal chia tab theo chủ đề của
+// EMOJI_SETS[setKey]. Chọn xong ghi vào hidden input + gọi onPick(emoji) nếu có.
+function renderEmojiPicker(containerId, setKey, selected, hiddenInputId, onPick){
   const el = document.getElementById(containerId);
-  el.innerHTML = choices.map(e=>`<button type="button" class="emoji-choice ${e===selected?'sel':''}" data-emoji="${e}">${e}</button>`).join('');
-  el.querySelectorAll('button').forEach(btn=>{
-    btn.addEventListener('click', ()=>{
-      el.querySelectorAll('button').forEach(b=>b.classList.remove('sel'));
-      btn.classList.add('sel');
-      document.getElementById(hiddenInputId).value = btn.dataset.emoji;
+  el.innerHTML = `<button type="button" class="emoji-select-btn">
+    <span class="emoji-select-current">${selected || ''}</span>
+    <span class="emoji-select-label">Đổi biểu tượng</span>
+    <span class="emoji-select-arrow">›</span>
+  </button>`;
+  el.querySelector('button').addEventListener('click', ()=>{
+    openEmojiPickerModal(setKey, document.getElementById(hiddenInputId).value || selected, (emoji)=>{
+      document.getElementById(hiddenInputId).value = emoji;
+      el.querySelector('.emoji-select-current').textContent = emoji;
+      if(onPick) onPick(emoji);
     });
   });
+}
+
+let emojiPickerState = null; // { setKey, selected, tab, onChoose }
+function openEmojiPickerModal(setKey, selected, onChoose){
+  const cats = EMOJI_SETS[setKey];
+  // Mở sẵn tab chứa icon đang chọn (nếu có), không thì tab đầu tiên.
+  const tab = cats.find(k => EMOJI_CATALOG[k].emojis.includes(selected)) || cats[0];
+  emojiPickerState = { setKey, selected, tab, onChoose };
+  renderEmojiPickerModal();
+  document.getElementById('emojiPickerModal').classList.add('open');
+}
+function renderEmojiPickerModal(){
+  const st = emojiPickerState;
+  const tabsEl = document.getElementById('emojiPickerTabs');
+  tabsEl.innerHTML = EMOJI_SETS[st.setKey].map(k=>{
+    const c = EMOJI_CATALOG[k];
+    return `<button type="button" class="emoji-tab ${k===st.tab?'on':''}" data-cat="${k}">${c.icon} ${c.name}</button>`;
+  }).join('');
+  tabsEl.querySelectorAll('.emoji-tab').forEach(b=>{
+    b.addEventListener('click', ()=>{ st.tab = b.dataset.cat; renderEmojiPickerModal(); });
+  });
+  const gridEl = document.getElementById('emojiPickerGrid');
+  gridEl.innerHTML = EMOJI_CATALOG[st.tab].emojis.map(e=>
+    `<button type="button" class="emoji-choice ${e===st.selected?'sel':''}" data-emoji="${e}">${e}</button>`
+  ).join('');
+  gridEl.querySelectorAll('.emoji-choice').forEach(b=>{
+    b.addEventListener('click', ()=>{
+      st.onChoose(b.dataset.emoji);
+      closeEmojiPickerModal();
+    });
+  });
+  const activeTab = tabsEl.querySelector('.emoji-tab.on');
+  if(activeTab) activeTab.scrollIntoView({ block:'nearest', inline:'nearest' });
+}
+function closeEmojiPickerModal(){
+  document.getElementById('emojiPickerModal').classList.remove('open');
+  emojiPickerState = null;
 }
 
 function saveTaskModal(){
@@ -2171,7 +2240,7 @@ function openTodoModal(id){
   const t = id ? p.todos.find(x=>x.id===id) : { title:'', emoji:EMOJI_CHOICES_TASK[0], days:[0,1,2,3,4,5,6] };
   document.getElementById('todoModalTitle').textContent = id ? 'Sửa việc to-do' : 'Thêm việc to-do mới';
   document.getElementById('todoTitleInput').value = t.title;
-  renderEmojiPicker('todoEmojiPicker', EMOJI_CHOICES_TASK, t.emoji, 'todoEmojiInput');
+  renderEmojiPicker('todoEmojiPicker', 'task', t.emoji, 'todoEmojiInput');
   document.getElementById('todoEmojiInput').value = t.emoji;
   renderDaysPicker(t.days && t.days.length ? t.days : [0,1,2,3,4,5,6], 'todoDaysRow');
   setOnceDateValue('todoOnceDateInput', 'todoOnceDateBtn', t.onceDate || todayKey());
@@ -2226,7 +2295,7 @@ function openClassModal(id){
   const c = id ? p.extraClasses.find(x=>x.id===id) : { title:'', emoji:EMOJI_CHOICES_CLASS[0], days:[], startTime:'', endTime:'' };
   document.getElementById('classModalTitle').textContent = id ? 'Sửa lịch học' : 'Thêm lịch học mới';
   document.getElementById('classTitleInput').value = c.title;
-  renderEmojiPicker('classEmojiPicker', EMOJI_CHOICES_CLASS, c.emoji, 'classEmojiInput');
+  renderEmojiPicker('classEmojiPicker', 'cls', c.emoji, 'classEmojiInput');
   document.getElementById('classEmojiInput').value = c.emoji;
   renderDaysPicker(c.days || [], 'classDaysRow');
   document.getElementById('classStartTimeInput').value = c.startTime || '';
@@ -2273,7 +2342,7 @@ function openRewardModal(id){
   document.getElementById('rewardModalTitle').textContent = id ? 'Sửa phần thưởng' : 'Thêm phần thưởng';
   document.getElementById('rewardTitleInput').value = r.title;
   document.getElementById('rewardThresholdInput').value = r.threshold;
-  renderEmojiPicker('rewardEmojiPicker', EMOJI_CHOICES_REWARD, r.emoji, 'rewardEmojiInput');
+  renderEmojiPicker('rewardEmojiPicker', 'reward', r.emoji, 'rewardEmojiInput');
   document.getElementById('rewardEmojiInput').value = r.emoji;
   document.getElementById('rewardModal').classList.add('open');
 }
@@ -2355,7 +2424,7 @@ function openProfileModal(id){
   const p = id ? getProfile(id) : { name:'', avatar: AVATAR_CHOICES[appData.profiles.length % AVATAR_CHOICES.length] };
   document.getElementById('profileModalTitle').textContent = id ? 'Sửa hồ sơ' : 'Thêm bé mới';
   document.getElementById('profileNameInput').value = p.name;
-  renderEmojiPicker('profileAvatarPicker', AVATAR_CHOICES, p.avatar, 'profileAvatarInput');
+  renderEmojiPicker('profileAvatarPicker', 'avatar', p.avatar, 'profileAvatarInput');
   document.getElementById('profileAvatarInput').value = p.avatar;
   document.getElementById('profileModal').classList.add('open');
 }
@@ -2815,8 +2884,52 @@ if(getSyncCode() && initFirebase()){
   startSyncListener();
 }
 
+// ===== Giao diện Sáng/Tối =====
+// Lưu riêng từng máy (không nằm trong appData, không đồng bộ Firebase) — máy của bé
+// để Sáng, máy Bố/Mẹ để Tối vẫn được. Mặc định 'light'. Script nhỏ trong <head> của
+// index.html cũng đọc key này để áp theme trước khi vẽ trang.
+const THEME_KEY = 'kidChecklistTheme';
+const THEME_COLORS = { light:'#fff8ec', dark:'#1e1b2e' };
+const darkMediaQuery = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
+
+function getThemePref(){
+  try{ return localStorage.getItem(THEME_KEY) || 'light'; }catch(e){ return 'light'; }
+}
+function applyTheme(){
+  const pref = getThemePref();
+  const mode = (pref === 'dark' || (pref === 'auto' && darkMediaQuery && darkMediaQuery.matches)) ? 'dark' : 'light';
+  document.documentElement.setAttribute('data-theme', mode);
+  const cs = document.querySelector('meta[name="color-scheme"]');
+  if(cs) cs.setAttribute('content', mode);
+  const tc = document.querySelector('meta[name="theme-color"]');
+  if(tc) tc.setAttribute('content', THEME_COLORS[mode]);
+  document.querySelectorAll('#themeTabs .seg-btn').forEach(b=>{
+    b.classList.toggle('on', b.dataset.themePref === pref);
+  });
+}
+function setThemePref(pref){
+  try{ localStorage.setItem(THEME_KEY, pref); }catch(e){}
+  applyTheme();
+}
+// Chế độ "Theo máy": đổi theo ngay khi người dùng bật/tắt Dark Mode của hệ thống.
+if(darkMediaQuery){
+  const onSystemThemeChange = ()=>{ if(getThemePref() === 'auto') applyTheme(); };
+  if(darkMediaQuery.addEventListener) darkMediaQuery.addEventListener('change', onSystemThemeChange);
+  else if(darkMediaQuery.addListener) darkMediaQuery.addListener(onSystemThemeChange);
+}
+
 document.addEventListener('DOMContentLoaded', ()=>{
   renderToday();
+
+  document.getElementById('emojiPickerCloseBtn').addEventListener('click', closeEmojiPickerModal);
+  document.getElementById('emojiPickerModal').addEventListener('click', (e)=>{
+    if(e.target.id === 'emojiPickerModal') closeEmojiPickerModal();
+  });
+
+  applyTheme();
+  document.querySelectorAll('#themeTabs .seg-btn').forEach(b=>{
+    b.addEventListener('click', ()=> setThemePref(b.dataset.themePref));
+  });
 
   // Hiện thông báo (nếu có) cho lần đối chiếu sao lúc mở app ở trên — để dành tới
   // đây vì lúc đó DOM (modal) chưa sẵn sàng.
