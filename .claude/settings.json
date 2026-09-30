@@ -1,0 +1,14 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cd \"$CLAUDE_PROJECT_DIR\" || exit 0; last=$(git log -1 --format=%H -- PROGRESS.md 2>/dev/null); [ -z \"$last\" ] && exit 0; n=$(git rev-list --count \"$last\"..HEAD 2>/dev/null || echo 0); if [ \"$n\" -gt 0 ]; then printf '{\"systemMessage\":\"📝 Có %s commit mới chưa ghi vào PROGRESS.md — chạy /init-context trước khi kết thúc phiên nhé.\"}' \"$n\"; fi; exit 0"
+          }
+        ]
+      }
+    ]
+  }
+}
