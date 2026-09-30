@@ -131,6 +131,8 @@ function newProfile(name, avatar){
     streakFreezes: 0,       // số vật phẩm "❄️ Đóng băng streak" đang có, mua bằng sao
     frozenDays: {},         // { 'YYYY-MM-DD': true } -> ngày đã dùng freeze để giữ streak,
                              // xem applyStreakFreezes()
+    extraClasses: [],       // lịch học thêm (cố định, học lặp lại theo tuần): [{ id, title,
+                             // emoji, days:[0-6] (0=CN), startTime:'HH:MM', endTime:'HH:MM'|null }]
   };
 }
 function defaultAppData(){
@@ -187,6 +189,7 @@ if(typeof appData.parentPin === 'undefined') appData.parentPin = null;
   if(!p.dayOffDates || typeof p.dayOffDates !== 'object') p.dayOffDates = {};
   if(typeof p.streakFreezes !== 'number' || p.streakFreezes < 0) p.streakFreezes = 0;
   if(!p.frozenDays || typeof p.frozenDays !== 'object') p.frozenDays = {};
+  if(!Array.isArray(p.extraClasses)) p.extraClasses = [];
   // Bài tập về nhà không cần theo dõi nhiều tháng: bài nào hạn nộp thuộc THÁNG
   // TRƯỚC (dù đã làm hay chưa) tự động bị dọn khỏi danh sách mỗi khi app mở lại
   // vào tháng mới. Trong cùng 1 tháng, bài quá hạn (đã qua ngày, chưa tick xong)
@@ -304,6 +307,22 @@ function progressFor(d){
 function isDayOff(dateKey){
   const p = activeProfile();
   return !!(p.dayOffDates && p.dayOffDates[dateKey]);
+}
+
+/* ---------- Lịch học thêm (cố định theo tuần, Bố/Mẹ cấu hình ở Cài đặt) ---------- */
+function fmtClassTime(c){
+  return c.endTime ? `${c.startTime} - ${c.endTime}` : c.startTime;
+}
+function classScheduleLabel(c){
+  const days = c.days.length===7 ? 'Hàng ngày' : c.days.map(d=>DAY_NAMES[d]).join(', ');
+  return `${days} · ${fmtClassTime(c)}`;
+}
+// Danh sách lịch học thêm của 1 NGÀY (theo thứ trong tuần), sắp theo giờ bắt đầu
+// — dùng cho widget "Hôm nay"/"Ngày mai" và card tổng hợp tuần ở tab Lịch học.
+function classesForWeekday(wd){
+  return (activeProfile().extraClasses || [])
+    .filter(c => (c.days||[]).includes(wd))
+    .sort((a,b)=> a.startTime.localeCompare(b.startTime));
 }
 
 /* ---------- Core logic: To-do (không bắt buộc, không tính sao) ---------- */
@@ -724,7 +743,24 @@ function homeworkRowHtml(h){
   `;
 }
 
+// Bảng tổng hợp lịch học thêm cả tuần (Thứ 2 -> CN) — lịch cố định lặp lại hàng
+// tuần nên hiện luôn cả tuần theo mẫu, không cần chọn theo ngày cụ thể như
+// homework. Dùng chung cho trang "Lịch học" (page-homework).
+function renderClassScheduleCard(){
+  const el = document.getElementById('classScheduleList');
+  if(!el) return;
+  const orderedDays = [1,2,3,4,5,6,0]; // Thứ 2 -> CN
+  const rows = orderedDays.map(wd=>{
+    const list = classesForWeekday(wd);
+    if(list.length === 0) return '';
+    const items = list.map(c=>`<span class="class-chip">${c.emoji} ${escapeHtml(c.title)} <b>${fmtClassTime(c)}</b></span>`).join('');
+    return `<div class="class-day-row"><div class="class-day-label">${DAY_NAMES_FULL[wd]}</div><div class="class-day-items">${items}</div></div>`;
+  }).filter(Boolean).join('');
+  el.innerHTML = rows || `<div class="empty-state" style="padding:12px 0">Chưa có lịch học thêm nào. Vào Cài đặt để thêm nhé!</div>`;
+}
+
 function renderHomeworkPage(){
+  renderClassScheduleCard();
   const el = document.getElementById('homeworkList');
   if(!el) return;
   const dateEl = document.getElementById('homeworkDate');
@@ -841,12 +877,37 @@ function saveHomeworkModal(){
 }
 
 /* ---------- Render: Today ---------- */
+// Widget nhỏ ở đầu trang "Hôm nay" để Bố/Mẹ quan sát nhanh lịch học thêm mà
+// không cần vào tận tab "Lịch học": hôm nay có lịch gì (hiện dạng "buổi học
+// hôm nay"), và nếu ngày mai có lịch thì báo trước dạng "sắp đến" để chuẩn bị.
+function renderTodayClassWidget(){
+  const el = document.getElementById('todayClassWidget');
+  if(!el) return;
+  const today = todayDate();
+  const todayList = classesForWeekday(weekdayOf(today));
+  const tomorrowList = classesForWeekday(weekdayOf(addDays(today, 1)));
+
+  let html = '';
+  if(todayList.length){
+    html += `<div class="today-class-card">
+      <div class="today-class-title">📅 Lịch học thêm hôm nay</div>
+      <div class="class-day-items">${todayList.map(c=>`<span class="class-chip">${c.emoji} ${escapeHtml(c.title)} <b>${fmtClassTime(c)}</b></span>`).join('')}</div>
+    </div>`;
+  }
+  if(tomorrowList.length){
+    const label = tomorrowList.map(c=>`${c.emoji} ${escapeHtml(c.title)} lúc ${fmtClassTime(c)}`).join(', ');
+    html += `<div class="today-class-upcoming">🔔 Ngày mai có lịch học thêm: ${label}</div>`;
+  }
+  el.innerHTML = html;
+}
+
 function renderToday(){
   const p = activeProfile();
   document.getElementById('todayDate').textContent = fmtHuman(todayDate());
   document.getElementById('starsBadge').textContent = `⭐ ${p.stars}`;
   document.getElementById('greetText').textContent = `Chào ${p.name}! 👋`;
   document.getElementById('switchAvatarToday').textContent = p.avatar;
+  renderTodayClassWidget();
 
   const list = tasksForDate(todayDate());
   const key = todayKey();
@@ -1283,6 +1344,7 @@ function renderHistory(){
 
 /* ---------- Render: Settings ---------- */
 const EMOJI_CHOICES_TASK = ['🪥','🛏️','📚','📖','🧹','🍎','🚿','🧦','🎒','🐶','🥦','⏰','💧','🎹','⚽️','🖍️','💊','🥛','🧮','🍳','🏃','🏀','🔤','🧼','😴','👕','🌱','📺','🎨','🚲'];
+const EMOJI_CHOICES_CLASS = ['📖','✏️','🧮','🎹','🎨','🖌️','⚽️','🏊','🥋','🩰','🎭','🎻','🚴','🔤','🧩','⛹️'];
 const EMOJI_CHOICES_REWARD = ['🎬','🎡','🧸','🍦','🍕','🎮','🚲','🎪','📱','🏊','🎨','🍭','💵','💰'];
 
 // Card gập/mở ở trang Cài đặt (checklist/to-do/mốc thưởng) — bấm vào tiêu đề để
@@ -1331,6 +1393,22 @@ function renderSettings(){
   const todayK = todayKey();
   const activeTodos = p.todos.filter(t => !t.onceDate || t.onceDate >= todayK);
   todoListEl.innerHTML = activeTodos.map(todoItemHtml).join('') || `<div class="empty-state">Chưa có việc to-do nào.</div>`;
+
+  const classListEl = document.getElementById('settingsClassList');
+  const classes = [...(p.extraClasses||[])].sort((a,b)=> a.startTime.localeCompare(b.startTime));
+  classListEl.innerHTML = classes.map(c=>`
+    <div class="list-item">
+      <div class="emoji">${c.emoji}</div>
+      <div class="info">
+        <div class="t">${escapeHtml(c.title)}</div>
+        <div class="s">${classScheduleLabel(c)}</div>
+      </div>
+      <button class="icon-btn" onclick="openClassModal('${c.id}')">✏️</button>
+      <button class="icon-btn danger" onclick="deleteClass('${c.id}')">🗑️</button>
+    </div>
+  `).join('') || `<div class="empty-state">Chưa có lịch học thêm nào.</div>`;
+  const classCardCountEl = document.getElementById('classCardCount');
+  if(classCardCountEl) classCardCountEl.textContent = classes.length;
 
   const rewardListEl = document.getElementById('settingsRewardList');
   rewardListEl.innerHTML = [...p.rewards].sort((a,b)=>a.threshold-b.threshold).map(r=>`
@@ -2140,6 +2218,52 @@ function deleteTodoItem(id){
   saveAppData(); renderAll();
 }
 
+/* ---------- Class modal (Lịch học thêm) ---------- */
+let editingClassId = null;
+function openClassModal(id){
+  editingClassId = id || null;
+  const p = activeProfile();
+  const c = id ? p.extraClasses.find(x=>x.id===id) : { title:'', emoji:EMOJI_CHOICES_CLASS[0], days:[], startTime:'', endTime:'' };
+  document.getElementById('classModalTitle').textContent = id ? 'Sửa lịch học' : 'Thêm lịch học mới';
+  document.getElementById('classTitleInput').value = c.title;
+  renderEmojiPicker('classEmojiPicker', EMOJI_CHOICES_CLASS, c.emoji, 'classEmojiInput');
+  document.getElementById('classEmojiInput').value = c.emoji;
+  renderDaysPicker(c.days || [], 'classDaysRow');
+  document.getElementById('classStartTimeInput').value = c.startTime || '';
+  document.getElementById('classEndTimeInput').value = c.endTime || '';
+  document.getElementById('classModal').classList.add('open');
+}
+function closeClassModal(){ document.getElementById('classModal').classList.remove('open'); }
+function saveClassModal(){
+  const title = document.getElementById('classTitleInput').value.trim();
+  if(!title){ alert('Nhập tên lớp học nhé!'); return; }
+  const emoji = document.getElementById('classEmojiInput').value || EMOJI_CHOICES_CLASS[0];
+  const days = [...document.querySelectorAll('#classDaysRow .day-chip.on')].map(c=>parseInt(c.dataset.day,10));
+  if(days.length===0){ alert('Chọn ít nhất 1 ngày trong tuần!'); return; }
+  const startTime = document.getElementById('classStartTimeInput').value;
+  if(!startTime){ alert('Chọn giờ bắt đầu nhé!'); return; }
+  const endTime = document.getElementById('classEndTimeInput').value || null;
+
+  const p = activeProfile();
+  p.extraClasses = p.extraClasses || [];
+  if(editingClassId){
+    const c = p.extraClasses.find(x=>x.id===editingClassId);
+    c.title = title; c.emoji = emoji; c.days = days; c.startTime = startTime; c.endTime = endTime;
+  } else {
+    p.extraClasses.push({ id: uid(), title, emoji, days, startTime, endTime });
+  }
+  saveAppData();
+  closeClassModal();
+  renderAll();
+}
+function deleteClass(id){
+  if(!confirm('Xoá lịch học này?')) return;
+  const p = activeProfile();
+  p.extraClasses = p.extraClasses.filter(x=>x.id!==id);
+  saveAppData();
+  renderAll();
+}
+
 /* ---------- Reward modal ---------- */
 let editingRewardId = null;
 function openRewardModal(id){
@@ -2747,6 +2871,9 @@ document.addEventListener('DOMContentLoaded', ()=>{
   document.querySelectorAll('#todoScheduleTypeTabs .seg-btn').forEach(btn=>{
     btn.addEventListener('click', ()=> setTodoScheduleType(btn.dataset.type));
   });
+  document.getElementById('addClassBtn').addEventListener('click', ()=>openClassModal(null));
+  document.getElementById('classCancelBtn').addEventListener('click', closeClassModal);
+  document.getElementById('classSaveBtn').addEventListener('click', saveClassModal);
   document.getElementById('addRewardBtn').addEventListener('click', ()=>openRewardModal(null));
   document.getElementById('taskCancelBtn').addEventListener('click', closeTaskModal);
   document.getElementById('taskSaveBtn').addEventListener('click', saveTaskModal);

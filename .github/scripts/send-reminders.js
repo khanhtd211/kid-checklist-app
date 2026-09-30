@@ -1,15 +1,24 @@
-// Gửi thông báo nhắc nhở checklist + bài tập về nhà qua Firebase Cloud Messaging.
-// Được chạy bởi GitHub Actions theo lịch — xem .github/workflows/send-reminders.yml
+// Gửi thông báo nhắc nhở checklist + bài tập về nhà + lịch học thêm (đưa/đón) qua
+// Firebase Cloud Messaging. Được chạy bởi GitHub Actions theo lịch — xem
+// .github/workflows/send-reminders.yml
 //
 // Mỗi gia đình (mã đồng bộ) có 1 document trong collection "families" trên Firestore,
 // chứa: json (toàn bộ dữ liệu app), notifyTokens (danh sách thiết bị đã bật thông báo),
 // notifySchedule (giờ ngẫu nhiên đã chọn cho hôm nay + đã gửi chưa, dùng chung cho cả
-// nhắc checklist và nhắc bài tập).
+// nhắc checklist, nhắc bài tập và nhắc lịch học thêm).
 //
 // Nhắc bài tập về nhà: báo cho các bài CHƯA làm xong, còn 2 ngày / 1 ngày / ngay hôm nay
 // là hạn nộp. Ngày thường chỉ báo vào khung "evening" (buổi tối) cho bé dễ theo dõi;
 // thứ 7/chủ nhật báo ở bất kỳ khung nào trong 3 khung (khung nào tới trước trong ngày thì
 // gửi), tối đa 1 lần/ngày — không lặp lại ở các khung sau cùng ngày.
+//
+// Nhắc lịch học thêm (đưa/đón): KHÔNG theo 3 khung cố định ở trên vì giờ học có thể rơi
+// vào bất kỳ lúc nào trong ngày — kiểm tra ĐỘC LẬP mỗi lần script chạy (bất kể WINDOW nào),
+// báo trước CLASS_NOTIFY_LEAD_MIN phút cho cả giờ bắt đầu (đưa đi) và giờ kết thúc nếu có
+// (đón về). Độ chính xác phụ thuộc tần suất cron-job.org gọi workflow này — 3 khung hiện
+// tại (10-11h cuối tuần / 15-17h / 19-20h) không phủ hết mọi giờ học có thể có, cần thêm
+// lịch gọi cron-job.org dày hơn (VD mỗi 15 phút, khung giờ rộng hơn) nếu muốn nhắc chính
+// xác cho giờ học nằm ngoài 3 khung này.
 const admin = require('firebase-admin');
 
 const WINDOW = process.env.NOTIFY_WINDOW; // 'weekend_morning' | 'afternoon' | 'evening'
@@ -27,6 +36,8 @@ const WINDOWS = {
   afternoon: { startMin: 15 * 60, endMin: 17 * 60 },
   evening: { startMin: 19 * 60, endMin: 20 * 60 },
 };
+
+const CLASS_NOTIFY_LEAD_MIN = 15; // báo trước tối đa 15 phút so với giờ đưa/đón
 
 const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
 admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
@@ -89,6 +100,41 @@ const SUBJECT_MAP = {
   hocthem: { name: 'Học thêm', emoji: '🏫' },
   khac: { name: 'Khác', emoji: '📚' },
 };
+
+// Với mỗi bé: lấy các lịch học thêm hôm nay (theo thứ wd) sắp tới giờ bắt đầu (đưa đi)
+// hoặc giờ kết thúc nếu có (đón về) trong vòng CLASS_NOTIFY_LEAD_MIN phút tới, VÀ chưa
+// từng báo cho đúng sự kiện đó hôm nay (tra trong alreadyNotified — key gồm cả dateKey
+// nên tự "reset" khi sang ngày mới, không cần dọn riêng).
+function getClassAlerts(appData, dateKey, wd, minuteOfDay, alreadyNotified) {
+  const profiles = appData.profiles || [];
+  const alerts = [];
+  profiles.forEach(p => {
+    (p.extraClasses || []).filter(c => (c.days || []).includes(wd)).forEach(c => {
+      const events = [{ type: 'start', time: c.startTime, action: 'đưa' }];
+      if (c.endTime) events.push({ type: 'end', time: c.endTime, action: 'đón' });
+      events.forEach(ev => {
+        if (!ev.time) return;
+        const key = `${p.id}_${c.id}_${ev.type}_${dateKey}`;
+        if (alreadyNotified[key]) return;
+        const [h, m] = ev.time.split(':').map(Number);
+        const evMinute = h * 60 + m;
+        const diff = evMinute - minuteOfDay;
+        // Chấp nhận trễ tới 5 phút (job chạy hơi muộn so với dự kiến) để không bỏ lỡ.
+        if (diff <= CLASS_NOTIFY_LEAD_MIN && diff >= -5) {
+          alerts.push({ key, profileName: p.name || 'Bé', emoji: c.emoji, title: c.title, time: ev.time, action: ev.action });
+        }
+      });
+    });
+  });
+  return alerts;
+}
+
+function buildClassBody(alerts) {
+  return alerts.map(a => {
+    const verb = a.action === 'đưa' ? `Sắp đến giờ đưa ${a.profileName} đi học` : `Sắp đến giờ đón ${a.profileName} (học xong)`;
+    return `⏰ ${verb} ${a.emoji} ${a.title} lúc ${a.time}`;
+  }).join('\n');
+}
 
 // Với mỗi bé: lấy các bài tập CHƯA làm xong, hạn nộp còn 0/1/2 ngày nữa (đã tự loại bài
 // quá hạn — dueDate < hôm nay — phòng trường hợp máy bé lâu chưa mở app để dọn lại).
@@ -161,6 +207,36 @@ function buildMixedBody(statuses) {
   return lines.join('\n');
 }
 
+// Gửi 1 push cho danh sách token, tách riêng để dùng chung cho cả nhánh "chỉ có lịch học
+// thêm" (gửi ngay, không chờ được) và nhánh gộp chung checklist/bài tập/lịch học thêm.
+async function sendPush(tokens, body) {
+  return admin.messaging().sendEachForMulticast({
+    tokens,
+    // title để chuỗi rỗng (không phải bỏ hẳn field — bỏ hẳn field mới gây lỗi hiện chữ
+    // "undefined" trên 1 số trình duyệt do firebase-messaging-compat ở sw.js gọi
+    // showNotification(undefined,...); chuỗi rỗng thì không sao).
+    // ĐÃ THỬ đặt title thật ('Checklist Của Con') nhưng Android/Chrome vẫn cứ tự chèn
+    // thêm dòng "from <short_name>" bên dưới (cơ chế chống giả mạo cho web push, không
+    // tắt được bằng bất kỳ field nào trong payload) — kết quả là hiện LẶP 2 dòng (title
+    // tự đặt + dòng Chrome tự thêm). Do đó bỏ hẳn title tự đặt, chỉ đổi short_name trong
+    // manifest.json thành "Checklist Của Con" để dòng Chrome tự chèn ("from ...") đọc
+    // đúng luôn, không cần thêm title riêng nữa.
+    notification: { title: '', body },
+  });
+}
+// Lọc bỏ các token đã hết hạn/không còn hợp lệ (thiết bị gỡ app, xoá quyền thông báo...)
+// dựa theo response của lần gửi vừa rồi, để lần sau khỏi tốn công gửi lại token chết.
+function cleanTokensFrom(tokens, resp) {
+  const badTokens = [];
+  resp.responses.forEach((r, i) => {
+    const code = r.error && r.error.code;
+    if (!r.success && (code === 'messaging/registration-token-not-registered' || code === 'messaging/invalid-registration-token')) {
+      badTokens.push(tokens[i]);
+    }
+  });
+  return badTokens.length ? tokens.filter(t => !badTokens.includes(t)) : tokens;
+}
+
 async function run() {
   let { dateKey, minuteOfDay, y, mo, d } = vnParts();
   let wd = weekdayOf(y, mo, d);
@@ -191,7 +267,7 @@ async function run() {
   const homeworkWindowAllowed = isWeekend || WINDOW === 'evening';
 
   const snap = await db.collection('families').get();
-  let sentCount = 0, skippedAllDone = 0, tooEarly = 0, alreadySent = 0, homeworkSentCount = 0;
+  let sentCount = 0, skippedAllDone = 0, tooEarly = 0, alreadySent = 0, homeworkSentCount = 0, classNotifyCount = 0;
 
   for (const doc of snap.docs) {
     const data = doc.data() || {};
@@ -200,8 +276,8 @@ async function run() {
 
     let schedule = data.notifySchedule;
     if (!schedule || schedule.dateKey !== dateKey) {
-      // Sang ngày mới: PHẢI xoá tường minh các khung khác + homeworkSent còn sót
-      // lại từ hôm qua bằng FieldValue.delete(), không thể chỉ gán `schedule =
+      // Sang ngày mới: PHẢI xoá tường minh các khung khác + homeworkSent/classNotified
+      // còn sót lại từ hôm qua bằng FieldValue.delete(), không thể chỉ gán `schedule =
       // {dateKey}` rồi ghi bằng set(...,{merge:true}) như trước — Firestore
       // merge:true merge SÂU vào field dạng map, nên khung nào không được nhắc
       // tới trong lần ghi đó vẫn "sống sót" nguyên trạng thái (kể cả sent:true)
@@ -215,6 +291,7 @@ async function run() {
         if (k !== WINDOW) deletions[k] = admin.firestore.FieldValue.delete();
       });
       deletions.homeworkSent = admin.firestore.FieldValue.delete();
+      deletions.classNotified = admin.firestore.FieldValue.delete();
       schedule = deletions;
     }
     // Khởi tạo riêng từng slot nếu thiếu (thay vì tạo cả 3 cùng lúc) — tránh lỗi
@@ -224,18 +301,41 @@ async function run() {
       schedule[WINDOW] = { targetMinute: randInt(win.startMin, win.endMin), sent: false };
     }
     const slot = schedule[WINDOW];
-
-    if (slot.sent && !FORCE && (schedule.homeworkSent || !homeworkWindowAllowed)) { alreadySent++; continue; }
-    if (!FORCE && minuteOfDay < slot.targetMinute) {
-      tooEarly++;
-      // Lưu lại ngay để giờ ngẫu nhiên hôm nay không bị đổi lại ở lần kiểm tra sau.
-      await doc.ref.set({ notifySchedule: schedule }, { merge: true });
-      continue;
-    }
+    schedule.classNotified = schedule.classNotified || {};
 
     let appData = null;
     try { appData = data.json ? JSON.parse(data.json) : null; } catch (e) { appData = null; }
     if (!appData) { continue; }
+
+    // ----- Lịch học thêm (nhắc đưa/đón) — kiểm tra ĐỘC LẬP với gate của checklist bên
+    // dưới (khung/giờ ngẫu nhiên), vì giờ học có thể tới bất kỳ lúc nào — không thể chờ
+    // tới lúc checklist "tới giờ" mới báo, sẽ trễ giờ đưa/đón thật.
+    const classAlerts = getClassAlerts(appData, dateKey, wd, minuteOfDay, schedule.classNotified);
+    const classBody = classAlerts.length ? buildClassBody(classAlerts) : null;
+
+    const checklistAlreadySent = slot.sent && !FORCE && (schedule.homeworkSent || !homeworkWindowAllowed);
+    const checklistTooEarly = !FORCE && minuteOfDay < slot.targetMinute;
+
+    if (checklistAlreadySent || checklistTooEarly) {
+      if (checklistTooEarly) tooEarly++; else alreadySent++;
+      if (!classBody) {
+        // Lưu lại ngay để giờ ngẫu nhiên hôm nay không bị đổi lại ở lần kiểm tra sau.
+        await doc.ref.set({ notifySchedule: schedule }, { merge: true });
+        continue;
+      }
+      // Không có gì để gửi cho checklist/bài tập lúc này, nhưng CÓ lịch học thêm cần báo
+      // ngay — không thể chờ (sẽ trễ giờ đưa/đón) — gửi riêng 1 push chỉ có phần này.
+      try {
+        const resp = await sendPush(tokens, classBody);
+        classAlerts.forEach(a => { schedule.classNotified[a.key] = true; });
+        classNotifyCount += classAlerts.length;
+        await doc.ref.set({ notifySchedule: schedule, notifyTokens: cleanTokensFrom(tokens, resp) }, { merge: true });
+        sentCount++;
+      } catch (e) {
+        console.error('Gửi lỗi (lịch học thêm) cho family', doc.id, e.message);
+      }
+      continue;
+    }
 
     // ----- Phần checklist (giữ nguyên hành vi cũ) -----
     let checklistBody = null;
@@ -261,7 +361,7 @@ async function run() {
       if (alerts.length) homeworkBody = buildHomeworkBody(alerts);
     }
 
-    const bodyParts = [checklistBody, homeworkBody].filter(Boolean);
+    const bodyParts = [checklistBody, homeworkBody, classBody].filter(Boolean);
     if (!bodyParts.length) {
       await doc.ref.set({ notifySchedule: schedule }, { merge: true });
       continue;
@@ -269,37 +369,18 @@ async function run() {
     const body = bodyParts.join('\n\n');
 
     try {
-      const resp = await admin.messaging().sendEachForMulticast({
-        tokens,
-        // title để chuỗi rỗng (không phải bỏ hẳn field — bỏ hẳn field mới gây lỗi
-        // hiện chữ "undefined" trên 1 số trình duyệt do firebase-messaging-compat ở
-        // sw.js gọi showNotification(undefined,...); chuỗi rỗng thì không sao).
-        // ĐÃ THỬ đặt title thật ('Checklist Của Con') nhưng Android/Chrome vẫn cứ tự
-        // chèn thêm dòng "from <short_name>" bên dưới (cơ chế chống giả mạo cho web
-        // push, không tắt được bằng bất kỳ field nào trong payload) — kết quả là hiện
-        // LẶP 2 dòng (title tự đặt + dòng Chrome tự thêm). Do đó bỏ hẳn title tự đặt,
-        // chỉ đổi short_name trong manifest.json thành "Checklist Của Con" để dòng
-        // Chrome tự chèn ("from ...") đọc đúng luôn, không cần thêm title riêng nữa.
-        notification: { title: '', body },
-      });
-      const badTokens = [];
-      resp.responses.forEach((r, i) => {
-        const code = r.error && r.error.code;
-        if (!r.success && (code === 'messaging/registration-token-not-registered' || code === 'messaging/invalid-registration-token')) {
-          badTokens.push(tokens[i]);
-        }
-      });
-      const cleanTokens = badTokens.length ? tokens.filter(t => !badTokens.includes(t)) : tokens;
+      const resp = await sendPush(tokens, body);
       if (checklistBody) slot.sent = true;
       if (homeworkBody) { schedule.homeworkSent = true; homeworkSentCount++; }
-      await doc.ref.set({ notifySchedule: schedule, notifyTokens: cleanTokens }, { merge: true });
+      if (classBody) { classAlerts.forEach(a => { schedule.classNotified[a.key] = true; }); classNotifyCount += classAlerts.length; }
+      await doc.ref.set({ notifySchedule: schedule, notifyTokens: cleanTokensFrom(tokens, resp) }, { merge: true });
       sentCount++;
     } catch (e) {
       console.error('Gửi lỗi cho family', doc.id, e.message);
     }
   }
 
-  console.log(`[${WINDOW}${FORCE ? ' (FORCE test)' : ''}${isCatchUp ? ' (CATCH-UP cho ' + dateKey + ')' : ''}] Đã gửi: ${sentCount} (bài tập: ${homeworkSentCount}), bỏ qua (chiều đã xong hết): ${skippedAllDone}, chưa tới giờ: ${tooEarly}, đã gửi từ trước: ${alreadySent}`);
+  console.log(`[${WINDOW}${FORCE ? ' (FORCE test)' : ''}${isCatchUp ? ' (CATCH-UP cho ' + dateKey + ')' : ''}] Đã gửi: ${sentCount} (bài tập: ${homeworkSentCount}, lịch học thêm: ${classNotifyCount}), bỏ qua (chiều đã xong hết): ${skippedAllDone}, chưa tới giờ: ${tooEarly}, đã gửi từ trước: ${alreadySent}`);
 }
 
 run().catch(e => { console.error(e); process.exit(1); });

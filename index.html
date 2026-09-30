@@ -40,6 +40,8 @@
       <button class="icon-btn" id="openStatsBtn" title="Xem thống kê tuần">📈</button>
     </div>
 
+    <div id="todayClassWidget"></div>
+
     <div class="progress-wrap">
       <div class="progress-label">
         <span id="progressLabel">0/0 việc đã xong</span>
@@ -56,18 +58,24 @@
     <div id="taskList"></div>
   </div>
 
-  <!-- HOMEWORK (Bài tập về nhà) -->
+  <!-- LỊCH HỌC (Lịch học thêm + Bài tập về nhà) -->
   <div class="page" id="page-homework">
     <div class="topbar">
       <div class="topbar-mid">
-        <div class="greet">🎒 Bài tập về nhà</div>
+        <div class="greet">🗓️ Lịch học</div>
         <div class="date" id="homeworkDate"></div>
       </div>
       <div class="hw-summary-badge" id="homeworkSummary" style="display:none"></div>
     </div>
 
     <div class="card">
-      <div class="section-title">Thống kê tháng này</div>
+      <div class="section-title">🗓️ Lịch học thêm</div>
+      <div id="classScheduleList"></div>
+      <div class="modal-hint" style="margin:10px 0 0">💡 Vào Cài đặt để thêm/sửa lịch học thêm.</div>
+    </div>
+
+    <div class="card">
+      <div class="section-title">🎒 Bài tập về nhà — Thống kê tháng này</div>
       <div class="history-summary">
         <div class="history-summary-item"><span>✅ Đã hoàn thành</span><b id="homeworkStatDone">0</b></div>
         <div class="history-summary-item"><span>⚠️ Quá hạn</span><b id="homeworkStatOverdue">0</b></div>
@@ -247,6 +255,17 @@
       </div>
     </div>
 
+    <div class="card collapsible" id="cardClassList">
+      <div class="card-header" onclick="toggleSettingsCard('cardClassList')">
+        <div class="section-title" style="margin:0">🗓️ Lịch học thêm <span class="card-count" id="classCardCount"></span></div>
+        <span class="card-chevron">▾</span>
+      </div>
+      <div class="card-body">
+        <div id="settingsClassList"></div>
+        <button class="add-btn" id="addClassBtn" style="background:#8a63d2">+ Thêm lịch học</button>
+      </div>
+    </div>
+
     <div class="card collapsible" id="cardRewardList">
       <div class="card-header" onclick="toggleSettingsCard('cardRewardList')">
         <div class="section-title" style="margin:0">🏆 Mốc thưởng theo số sao <span class="card-count" id="rewardCardCount"></span></div>
@@ -285,7 +304,7 @@
     <div class="card">
       <div class="section-title">🔔 Thông báo nhắc nhở</div>
       <div class="modal-hint" id="notifyStatusText" style="margin-top:0">⚪ Chưa bật thông báo trên máy này.</div>
-      <div style="font-size:13px;color:var(--muted);margin-bottom:10px">App sẽ tự nhắc 1 lần buổi chiều (15h-17h) và 1 lần buổi tối (19h-20h) nếu bé chưa hoàn thành hết checklist hôm nay (bỏ qua nếu bé đã xong hết rồi). Bài tập về nhà chưa làm cũng được nhắc riêng — còn 2 ngày, 1 ngày, hoặc ngay hôm nay là hạn nộp — vào buổi tối các ngày thường, và bất kỳ lúc nào trong ngày vào cuối tuần. Cần bật Đồng bộ nhiều thiết bị ở trên trước.</div>
+      <div style="font-size:13px;color:var(--muted);margin-bottom:10px">App sẽ tự nhắc 1 lần buổi chiều (15h-17h) và 1 lần buổi tối (19h-20h) nếu bé chưa hoàn thành hết checklist hôm nay (bỏ qua nếu bé đã xong hết rồi). Bài tập về nhà chưa làm cũng được nhắc riêng — còn 2 ngày, 1 ngày, hoặc ngay hôm nay là hạn nộp — vào buổi tối các ngày thường, và bất kỳ lúc nào trong ngày vào cuối tuần. Lịch học thêm cũng được nhắc trước ~15 phút giờ đưa/đón (độ chính xác phụ thuộc tần suất kiểm tra nền — có thể trễ với giờ học ngoài các khung trên). Cần bật Đồng bộ nhiều thiết bị ở trên trước.</div>
       <button class="add-btn" id="notifyEnableBtn">🔔 Bật thông báo trên máy này</button>
     </div>
   </div>
@@ -294,7 +313,7 @@
 
 <div class="tabbar" id="tabbar">
   <button class="active" data-tab="today"><span class="icon-wrap"><span class="icon">📋</span><span class="tab-badge today" id="tabBadgeToday"></span></span>Hôm nay</button>
-  <button data-tab="homework"><span class="icon-wrap"><span class="icon">🎒</span><span class="tab-badge homework" id="tabBadgeHomework"></span></span>Bài tập</button>
+  <button data-tab="homework"><span class="icon-wrap"><span class="icon">🗓️</span><span class="tab-badge homework" id="tabBadgeHomework"></span></span>Lịch học</button>
   <button data-tab="todo"><span class="icon-wrap"><span class="icon">🗒️</span><span class="tab-badge todo" id="tabBadgeTodo"></span></span>To-do</button>
   <button data-tab="voucher"><span class="icon-wrap"><span class="icon">🎫</span><span class="tab-badge voucher" id="tabBadgeVoucher"></span></span>Phiếu quà</button>
   <button data-tab="settings"><span class="icon">⚙️</span>Cài đặt</button>
@@ -369,6 +388,40 @@
     <div class="sheet-actions">
       <button class="btn-secondary" id="todoCancelBtn">Huỷ</button>
       <button class="btn-primary" id="todoSaveBtn" style="background:#4fa8ff">Lưu</button>
+    </div>
+  </div>
+</div>
+
+<!-- Class modal (Lịch học thêm) -->
+<div class="overlay" id="classModal">
+  <div class="sheet">
+    <h3 id="classModalTitle">Thêm lịch học mới</h3>
+    <div class="field">
+      <label>Tên lớp học</label>
+      <input type="text" id="classTitleInput" placeholder="VD: Toán, Piano, C-class">
+    </div>
+    <div class="field">
+      <label>Biểu tượng</label>
+      <div class="emoji-picker" id="classEmojiPicker"></div>
+      <input type="hidden" id="classEmojiInput">
+    </div>
+    <div class="field">
+      <label>Ngày học trong tuần</label>
+      <div class="days-row" id="classDaysRow"></div>
+    </div>
+    <div class="field" style="display:flex;gap:10px">
+      <div style="flex:1">
+        <label>Giờ bắt đầu</label>
+        <input type="time" id="classStartTimeInput">
+      </div>
+      <div style="flex:1">
+        <label>Giờ kết thúc (không bắt buộc)</label>
+        <input type="time" id="classEndTimeInput">
+      </div>
+    </div>
+    <div class="sheet-actions">
+      <button class="btn-secondary" id="classCancelBtn">Huỷ</button>
+      <button class="btn-primary" id="classSaveBtn" style="background:#8a63d2">Lưu</button>
     </div>
   </div>
 </div>
