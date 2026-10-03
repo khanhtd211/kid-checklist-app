@@ -416,9 +416,9 @@ bằng browser pane giả lập iPhone; chờ user test trên điện thoại th
 ## Việc tồn đọng / Next steps
 
 - **[03/10/2026] Cần user xác nhận fix đồng bộ** trên cả điện thoại + iPad (phải
-  tắt hẳn app rồi mở lại cả 2 máy để lên bản v95). Đề xuất (chưa làm, chờ user):
-  thêm dòng trạng thái đồng bộ trong Cài đặt (lần đồng bộ cuối / lỗi) để chẩn
-  đoán nếu iPad lại lệch.
+  tắt hẳn app rồi mở lại cả 2 máy để lên bản v95). Đã đề xuất thêm dòng trạng
+  thái đồng bộ trong Cài đặt (lần đồng bộ cuối / lỗi) — **user quyết định KHÔNG
+  làm** (03/10), không đề xuất lại.
 
 - **[30/09/2026] Cần user test trên điện thoại thật:** giao diện mới (sáng + tối),
   nút chuyển theme, bộ chọn icon ở các form **chưa bấm thử trên máy**: to-do, lịch
