@@ -201,14 +201,7 @@ function loadAppData(){
 
 function saveAppData(){
   localStorage.setItem(STORAGE_KEY, JSON.stringify(appData));
-  if(getSyncCode()){
-    // Chỉ bật cờ "còn thay đổi chưa đẩy lên" khi máy đã từng đồng bộ xong ít nhất 1
-    // lần (syncReady) — giữ nguyên hành vi cũ cho khoảnh khắc vừa mở app, máy đang
-    // chờ bản mới nhất từ mây lần đầu (xem comment dài ở pushToCloud() giải thích
-    // đúng race condition đó), tránh đẩy ngược bản cũ của máy này đè lên máy khác.
-    if(syncReady) localStorage.setItem(PENDING_PUSH_KEY, '1');
-    schedulePush();
-  }
+  if(getSyncCode()) schedulePush();
 }
 
 function normalizeAppData(){
@@ -2496,23 +2489,133 @@ const FIREBASE_CONFIG = {
   appId: "1:638904549868:web:700bb8b98ec82550c7c0c9"
 };
 const SYNC_CODE_KEY = 'kidChecklistSyncCode_v1';
-// Cờ riêng từng máy (KHÔNG nằm trong appData nên không bị cuốn theo dữ liệu đồng bộ):
-// bật lên mỗi khi máy này vừa lưu thay đổi nhưng CHƯA chắc đã đẩy lên mây thành công
-// (lưu ở localStorage nên sống sót qua việc tắt/mở lại app) — xem saveAppData() +
-// onSnapshot() trong startSyncListener(). Fix bug thật: bé tick xong việc rồi tắt
-// app/khoá máy ngay lập tức (rất hay gặp), lúc đó lần đẩy lên mây (debounce 800ms)
-// bị huỷ giữa chừng và KHÔNG tự thử lại — nếu không có cờ này, lần mở app kế tiếp
-// (hoặc máy khác) sẽ tải bản cũ từ mây về và ghi đè mất luôn phần vừa tick/vừa thêm,
-// dù phần đó đã lưu đúng trong localStorage.
-const PENDING_PUSH_KEY = 'kidChecklistPendingPush_v1';
-let fbApp = null, fbDb = null, fbUnsub = null, syncPushTimer = null, syncApplyingRemote = false;
-// true khi đã nhận được snapshot ĐẦU TIÊN từ Firestore kể từ lần gọi
-// startSyncListener() gần nhất — xem giải thích chi tiết ở pushToCloud().
-let syncReady = false;
+// "Bản gốc" của máy này: bản dữ liệu gần nhất mà máy BIẾT CHẮC đang khớp với mây
+// (lưu riêng từng máy ở localStorage, không đồng bộ). Dùng để biết máy này đã sửa
+// gì so với mây (local vs base) và mây đã đổi gì từ máy khác (remote vs base) —
+// từ đó GỘP 2 bên (xem mergeAppData) thay vì bản sau ghi đè nguyên khối bản trước.
+// Fix bug thật (03/10/2026): iPad và điện thoại cùng mở 1 bé, mỗi máy tick 1 việc
+// khác nhau -> trước đây máy nào đẩy sau thì xoá mất việc máy kia vừa tick, có lúc
+// 2 máy còn lệch nhau hẳn (máy tick "Đọc sách", máy kia tick "Dọn bàn học").
+const SYNC_BASE_KEY = 'kidChecklistSyncBase_v1';
+let fbApp = null, fbDb = null, fbUnsub = null, syncPushTimer = null;
+let syncPushing = false, syncPushAgain = false, syncRetryTimer = null, syncListenerRetryTimer = null;
 
 function getSyncCode(){ return localStorage.getItem(SYNC_CODE_KEY) || null; }
 function setSyncCode(code){ localStorage.setItem(SYNC_CODE_KEY, code); }
 function clearSyncCode(){ localStorage.removeItem(SYNC_CODE_KEY); }
+function getSyncBase(){
+  try{ const raw = localStorage.getItem(SYNC_BASE_KEY); return raw ? JSON.parse(raw) : null; }
+  catch(e){ return null; }
+}
+function setSyncBase(data){ localStorage.setItem(SYNC_BASE_KEY, JSON.stringify(data)); }
+function clearSyncBase(){ localStorage.removeItem(SYNC_BASE_KEY); }
+
+/* ---------- Gộp dữ liệu 3 chiều (base / máy này / mây) ---------- */
+// activeProfileId là lựa chọn RIÊNG từng máy (iPad đang xem Múp, điện thoại đang xem
+// Nhộng) — không tính là "thay đổi dữ liệu", và luôn giữ nguyên của máy này khi gộp.
+function syncComparable(d){
+  if(!d) return '';
+  const c = Object.assign({}, d);
+  delete c.updatedAt;
+  delete c.activeProfileId;
+  return JSON.stringify(c);
+}
+function hasUnsyncedChanges(){
+  const base = getSyncBase();
+  return !base || syncComparable(appData) !== syncComparable(base);
+}
+function isPlainObj(v){ return v !== null && typeof v === 'object' && !Array.isArray(v); }
+function sameJson(a, b){ return JSON.stringify(a) === JSON.stringify(b); }
+function cloneJson(v){ return v === undefined ? undefined : JSON.parse(JSON.stringify(v)); }
+function isIdItem(x){ return isPlainObj(x) && typeof x.id === 'string'; }
+
+// Gộp đệ quy: bên nào đổi so với base thì lấy bên đó; object gộp theo từng key,
+// mảng có id (việc, to-do, lịch sử sao, phiếu quà...) gộp theo từng phần tử. Cả 2
+// cùng đổi 1 giá trị đơn -> ưu tiên máy này. base = undefined (chưa có bản gốc, VD
+// lần đầu chạy bản cập nhật này) -> gộp hợp 2 bên, không bỏ dữ liệu của bên nào.
+function merge3(base, local, remote){
+  if(sameJson(local, remote)) return cloneJson(local);
+  if(base !== undefined && sameJson(local, base)) return cloneJson(remote);
+  if(base !== undefined && sameJson(remote, base)) return cloneJson(local);
+  if(isPlainObj(local) && isPlainObj(remote)){
+    const b = isPlainObj(base) ? base : null;
+    const out = {};
+    new Set([...Object.keys(local), ...Object.keys(remote)]).forEach(k=>{
+      const inL = k in local, inR = k in remote, inB = !!b && (k in b);
+      if(inL && inR){ out[k] = merge3(inB ? b[k] : undefined, local[k], remote[k]); return; }
+      if(inL){
+        if(inB && sameJson(local[k], b[k])) return; // máy kia đã xoá, máy này không đụng tới
+        out[k] = cloneJson(local[k]); return;
+      }
+      if(inB && sameJson(remote[k], b[k])) return;   // máy này đã xoá, máy kia không đụng tới
+      out[k] = cloneJson(remote[k]);
+    });
+    return out;
+  }
+  if(Array.isArray(local) && Array.isArray(remote) && (local.some(isIdItem) || remote.some(isIdItem))){
+    return mergeIdArrays(Array.isArray(base) ? base : [], local, remote);
+  }
+  return cloneJson(local);
+}
+function mergeIdArrays(base, local, remote){
+  const toMap = arr => new Map(arr.filter(isIdItem).map(x=>[x.id, x]));
+  const bMap = toMap(base), lMap = toMap(local), rMap = toMap(remote);
+  const idsOf = arr => arr.filter(isIdItem).map(x=>x.id).join('|');
+  // Giữ thứ tự của bên có sắp xếp lại; phần tử chỉ 1 bên có thì nối vào sau.
+  const primary = (base.length && idsOf(remote) === idsOf(base)) ? local : remote;
+  const secondary = primary === local ? remote : local;
+  const order = [], seen = new Set();
+  [...primary, ...secondary].forEach(x=>{
+    if(isIdItem(x) && !seen.has(x.id)){ seen.add(x.id); order.push(x.id); }
+  });
+  const out = [];
+  order.forEach(id=>{
+    const l = lMap.get(id), r = rMap.get(id), b = bMap.get(id);
+    if(l && r){ out.push(merge3(b, l, r)); return; }
+    const only = l || r;
+    if(b && sameJson(only, b)) return; // bên kia đã xoá, bên này không sửa gì -> xoá theo
+    out.push(cloneJson(only));
+  });
+  return out;
+}
+
+// Gộp toàn bộ appData + sửa lại các con số "đếm" (sao, ❄️) cho khớp: không gộp
+// kiểu "lấy số của 1 bên" vì 2 máy có thể cùng cộng/trừ — tính lại từ lịch sử sao
+// và frozenDays (mỗi lần cộng/trừ sao đều có 1 dòng starHistory tương ứng).
+function mergeAppData(base, local, remote){
+  const merged = merge3(base ? cloneJson(base) : undefined, local, remote);
+  const findP = (data, id) => data && Array.isArray(data.profiles) ? data.profiles.find(p=>p.id===id) : null;
+  (merged.profiles || []).forEach(p=>{
+    const ref = findP(base, p.id) || findP(remote, p.id);
+    p.starHistory = Array.isArray(p.starHistory) ? p.starHistory : [];
+    // 2 máy cùng chấm sao "hoàn thành" cho 1 ngày -> chỉ giữ 1 dòng
+    const seenDays = new Set();
+    p.starHistory = p.starHistory.filter(h=>{
+      if(h.type !== 'complete') return true;
+      if(seenDays.has(h.dateKey)) return false;
+      seenDays.add(h.dateKey); return true;
+    });
+    p.starHistory.sort((a,b)=>(b.at||0)-(a.at||0));
+    if(Array.isArray(p.vouchers)) p.vouchers.sort((a,b)=>(b.redeemedAt||0)-(a.redeemedAt||0));
+    if(!ref) return;
+    const refHist = Array.isArray(ref.starHistory) ? ref.starHistory : [];
+    const refIds = new Set(refHist.map(h=>h.id));
+    const newIds = new Set(p.starHistory.map(h=>h.id));
+    const isFreezeBuy = h => h.emoji === STREAK_FREEZE_EMOJI && h.amount < 0;
+    let starDelta = 0, freezeDelta = 0;
+    p.starHistory.forEach(h=>{ if(!refIds.has(h.id)){ starDelta += (h.amount||0); if(isFreezeBuy(h)) freezeDelta += 1; } });
+    refHist.forEach(h=>{ if(!newIds.has(h.id)){ starDelta -= (h.amount||0); if(isFreezeBuy(h)) freezeDelta -= 1; } });
+    p.stars = Math.max(0, (ref.stars||0) + starDelta);
+    const refFrozen = ref.frozenDays || {}, newFrozen = p.frozenDays || {};
+    Object.keys(newFrozen).forEach(k=>{ if(!refFrozen[k]) freezeDelta -= 1; });
+    Object.keys(refFrozen).forEach(k=>{ if(!newFrozen[k]) freezeDelta += 1; });
+    p.streakFreezes = Math.max(0, (ref.streakFreezes||0) + freezeDelta);
+  });
+  if(local && local.activeProfileId && (merged.profiles||[]).some(p=>p.id===local.activeProfileId)){
+    merged.activeProfileId = local.activeProfileId;
+  }
+  return merged;
+}
 
 function genSyncCode(){
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // tránh ký tự dễ nhầm 0/O, 1/I/L
@@ -2538,36 +2641,41 @@ function syncDocRef(){
   return fbDb.collection('families').doc(code);
 }
 
+// Đẩy lên mây bằng transaction: đọc bản MỚI NHẤT trên mây ngay lúc ghi, gộp phần
+// máy này đã sửa (so với bản gốc) vào đó rồi mới ghi — không bao giờ ghi đè nguyên
+// khối lên dữ liệu máy khác vừa đẩy. Lỗi (mất mạng...) thì tự thử lại sau; thay
+// đổi vẫn nằm an toàn trong localStorage và luôn được nhận ra là "chưa đồng bộ"
+// nhờ so với bản gốc (kể cả sau khi tắt/mở lại app).
 function pushToCloud(){
   const ref = syncDocRef();
-  if(!ref || syncApplyingRemote) return;
-  // Chờ nhận được snapshot ĐẦU TIÊN từ máy chủ trước khi cho phép đẩy dữ liệu lên.
-  // Fix cho bug thật: máy A thêm phiếu quà -> đồng bộ lên mây. Máy B đang đóng/
-  // offline, dữ liệu local của B vẫn là bản CŨ (thiếu phiếu quà đó). Máy B mở app
-  // lên, listener bắt đầu tải bản mới nhất từ mây (cần chút thời gian, có độ trễ
-  // mạng) — nhưng nếu bé/phụ huynh thao tác gì đó (tick việc...) NGAY LÚC ĐÓ, trước
-  // khi bản mới kịp tải về, saveAppData() sẽ đẩy thẳng bản CŨ của máy B lên với
-  // timestamp MỚI HƠN (vì là thời điểm thực tế muộn hơn) -> ghi đè mất phiếu quà mà
-  // máy A vừa thêm, trên CẢ 2 máy (vì mọi máy đang nghe đều nhận bản ghi đè này qua
-  // onSnapshot). Chặn lại bằng cách hoãn push tới khi syncReady=true (được bật lên
-  // trong startSyncListener() ngay khi có snapshot đầu tiên, dù có thay đổi gì hay
-  // không) — đảm bảo máy luôn có đúng bản mới nhất làm nền trước khi tự ý ghi đè
-  // lên máy chủ.
-  if(!syncReady){
-    setTimeout(pushToCloud, 500);
-    return;
-  }
-  appData.updatedAt = Date.now();
-  // merge:true — không được ghi đè cả document, vì document còn chứa notifyTokens/notifySchedule
-  // (dữ liệu thông báo) không thuộc về appData và không được phép bị xoá mỗi lần lưu.
-  ref.set({ json: JSON.stringify(appData), updatedAt: appData.updatedAt }, { merge: true }).then(()=>{
-    // Đẩy thành công -> tắt cờ "còn thay đổi chưa đẩy lên" (xem PENDING_PUSH_KEY).
-    // Có thể có thay đổi mới hơn phát sinh ngay trong lúc đang đẩy (hiếm, vài trăm
-    // ms) chưa kịp gộp vào lần này -> chấp nhận, lần saveAppData() kế tiếp sẽ tự
-    // bật cờ lại và lên lịch đẩy tiếp bình thường.
-    localStorage.removeItem(PENDING_PUSH_KEY);
+  if(!ref) return;
+  if(syncPushing){ syncPushAgain = true; return; }
+  if(!hasUnsyncedChanges()) return;
+  syncPushing = true;
+  clearTimeout(syncRetryTimer);
+  const localAtPush = cloneJson(appData);
+  const base = getSyncBase();
+  let pushed = null;
+  fbDb.runTransaction(tx => tx.get(ref).then(snap=>{
+    const remoteJson = snap.exists && snap.data() ? snap.data().json : null;
+    pushed = remoteJson ? mergeAppData(base, localAtPush, JSON.parse(remoteJson)) : cloneJson(localAtPush);
+    pushed.updatedAt = Date.now();
+    // merge:true — document còn chứa notifyTokens/notifySchedule (dữ liệu thông báo)
+    // không thuộc về appData, không được xoá mỗi lần lưu.
+    tx.set(ref, { json: JSON.stringify(pushed), updatedAt: pushed.updatedAt }, { merge: true });
+  })).then(()=>{
+    setSyncBase(pushed);
+    // Trong lúc đang đẩy, máy này có thể vừa sửa thêm / vừa nhận bản mới -> gộp tiếp.
+    const next = syncComparable(appData) === syncComparable(localAtPush)
+      ? pushed : mergeAppData(localAtPush, appData, pushed);
+    applySyncedData(next);
+    if(hasUnsyncedChanges()) syncPushAgain = true;
   }).catch(err=>{
     console.error('Đồng bộ lên mây lỗi', err);
+    syncRetryTimer = setTimeout(pushToCloud, 5000);
+  }).finally(()=>{
+    syncPushing = false;
+    if(syncPushAgain){ syncPushAgain = false; schedulePush(); }
   });
 }
 function schedulePush(){
@@ -2575,57 +2683,74 @@ function schedulePush(){
   syncPushTimer = setTimeout(pushToCloud, 800);
 }
 
+// Thay appData bằng bản đã gộp, giữ nguyên bé đang chọn trên máy này.
+function applySyncedData(next){
+  const before = JSON.stringify(appData);
+  const keepActive = appData && appData.activeProfileId;
+  appData = next;
+  if(keepActive && (appData.profiles || []).some(p=>p.id===keepActive)) appData.activeProfileId = keepActive;
+  normalizeAppData();
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(appData));
+  if(JSON.stringify(appData) !== before) renderAll();
+}
+
 function startSyncListener(){
+  if(!syncDocRef()) return;
+  maybeAutoBackup();
+  attachSyncListener();
+}
+// Gắn (lại) listener nhận thay đổi từ mây. Gọi lại mỗi khi app được mở lên từ nền —
+// trên iPad/iPhone, app nằm nền lâu có thể khiến listener "đứng" mà không báo lỗi,
+// máy cứ hiển thị dữ liệu cũ (đúng bug 03/10: iPad không thấy việc điện thoại tick).
+function attachSyncListener(){
   const ref = syncDocRef();
   if(!ref) return;
-  maybeAutoBackup();
-  syncReady = false; // đang chờ xác nhận bản mới nhất từ máy chủ, xem pushToCloud()
+  clearTimeout(syncListenerRetryTimer);
   if(fbUnsub){ fbUnsub(); fbUnsub = null; }
   fbUnsub = ref.onSnapshot(snap=>{
-    // Bật syncReady NGAY dù snapshot này có mang thay đổi mới hay không — chỉ cần
-    // biết chắc đã hỏi máy chủ ít nhất 1 lần là đủ an toàn để tự tin đẩy dữ liệu.
-    syncReady = true;
-    if(!snap.exists) return;
+    if(!snap.exists || snap.metadata.hasPendingWrites) return;
     const remote = snap.data();
     if(!remote || !remote.json) return;
-    // Máy này còn thay đổi local chưa chắc đã đẩy lên mây (VD vừa tick việc/thêm việc
-    // xong thì tắt app ngay, lần đẩy debounce 800ms bị huỷ giữa chừng) -> TUYỆT ĐỐI
-    // không nhận bản từ mây đè lên kẻo mất đúng phần đó, dù bản mây có updatedAt mới
-    // hơn (updatedAt của máy này chỉ cập nhật lúc đẩy THÀNH CÔNG, không phản ánh đúng
-    // lúc sửa). Chủ động đẩy lại thay vì nhận, để phần còn thiếu chắc chắn lên mây.
-    if(localStorage.getItem(PENDING_PUSH_KEY)){
-      schedulePush();
-      return;
+    let remoteData;
+    try{ remoteData = JSON.parse(remote.json); }
+    catch(e){ console.error('Không đọc được dữ liệu đồng bộ', e); return; }
+    const base = getSyncBase();
+    if(base && syncComparable(remoteData) === syncComparable(base)){
+      if(hasUnsyncedChanges()) schedulePush();
+      return; // mây không có gì mới so với lần đồng bộ trước
     }
-    if(remote.updatedAt && remote.updatedAt <= (appData.updatedAt || 0)) return;
-    try{
-      syncApplyingRemote = true;
-      appData = JSON.parse(remote.json);
-      normalizeAppData();
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(appData));
-      renderAll();
-    }catch(e){
-      console.error('Không đọc được dữ liệu đồng bộ', e);
-    }finally{
-      syncApplyingRemote = false;
-    }
+    const next = hasUnsyncedChanges() ? mergeAppData(base, appData, remoteData) : remoteData;
+    setSyncBase(remoteData);
+    applySyncedData(next);
+    if(hasUnsyncedChanges()) schedulePush();
   }, err=>{
-    // Lỗi kết nối kéo dài không nên chặn push mãi mãi (đồng bộ vốn best-effort) —
-    // cho phép đẩy bình thường, chấp nhận rủi ro nhỏ như hành vi cũ trước bản fix.
-    syncReady = true;
+    // Listener của Firestore chết hẳn sau khi báo lỗi -> tự gắn lại sau ít giây.
     console.error('Lỗi lắng nghe đồng bộ', err);
+    syncListenerRetryTimer = setTimeout(attachSyncListener, 5000);
   });
 }
+function resyncNow(){
+  if(!getSyncCode() || !fbDb) return;
+  attachSyncListener();
+  schedulePush();
+}
+document.addEventListener('visibilitychange', ()=>{
+  if(!getSyncCode() || !fbDb) return;
+  if(document.visibilityState === 'visible') resyncNow();
+  else if(hasUnsyncedChanges()){ clearTimeout(syncPushTimer); pushToCloud(); } // sắp tắt/ẩn app: đẩy ngay
+});
+window.addEventListener('online', resyncNow);
+window.addEventListener('pageshow', e=>{ if(e.persisted) resyncNow(); });
 
 function createSyncCodeFlow(){
   if(!confirm('Tạo mã đồng bộ mới? Toàn bộ dữ liệu hiện tại trên máy này sẽ được tải lên để chia sẻ với các thiết bị khác.')) return;
   if(!initFirebase()){ alert('Không tải được thư viện đồng bộ. Kiểm tra kết nối mạng rồi thử lại nhé.'); return; }
   const code = genSyncCode();
   setSyncCode(code);
-  localStorage.removeItem(PENDING_PUSH_KEY); // cờ của mã đồng bộ cũ (nếu có) không còn liên quan
   appData.updatedAt = Date.now();
   syncDocRef().set({ json: JSON.stringify(appData), updatedAt: appData.updatedAt })
     .then(()=>{
+      setSyncBase(appData);
       startSyncListener();
       renderSyncSettings();
       alert(`Đã tạo mã đồng bộ: ${code}\n\nGhi lại mã này và nhập vào các thiết bị khác (trong Cài đặt → Đồng bộ nhiều thiết bị) để dùng chung dữ liệu nhé!`);
@@ -2650,7 +2775,7 @@ function joinSyncCodeFlow(){
     try{
       appData = JSON.parse(snap.data().json);
       setSyncCode(code);
-      localStorage.removeItem(PENDING_PUSH_KEY); // vừa thay toàn bộ = bản mây đã là bản đúng
+      setSyncBase(appData); // vừa thay toàn bộ bằng bản mây -> đây chính là bản gốc
       normalizeAppData();
       localStorage.setItem(STORAGE_KEY, JSON.stringify(appData));
       startSyncListener();
@@ -2669,7 +2794,7 @@ function stopSyncFlow(){
   if(!confirm('Ngừng đồng bộ? Dữ liệu trên máy này vẫn được giữ nguyên, chỉ không còn tự động cập nhật qua các thiết bị khác nữa.')) return;
   if(fbUnsub){ fbUnsub(); fbUnsub = null; }
   clearSyncCode();
-  localStorage.removeItem(PENDING_PUSH_KEY);
+  clearSyncBase();
   renderSyncSettings();
 }
 
