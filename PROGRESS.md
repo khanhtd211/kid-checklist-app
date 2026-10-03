@@ -418,7 +418,13 @@ bằng browser pane giả lập iPhone; chờ user test trên điện thoại th
 - **[03/10/2026] Cần user xác nhận fix đồng bộ** trên cả điện thoại + iPad (phải
   tắt hẳn app rồi mở lại cả 2 máy để lên bản v95). Đã đề xuất thêm dòng trạng
   thái đồng bộ trong Cài đặt (lần đồng bộ cuối / lỗi) — **user quyết định KHÔNG
-  làm** (03/10), không đề xuất lại.
+  làm** (03/10), không đề xuất lại. User muốn đồng bộ chạy ngầm hoàn toàn, KHÔNG
+  hiện gì liên quan đồng bộ trên giao diện người dùng.
+- **[03/10/2026] Log chẩn đoán đồng bộ chạy ngầm** (không UI): mỗi máy ghi lần kết
+  nối máy chủ/gửi lên cuối + 10 lỗi gần nhất, gửi kèm lần đẩy dữ liệu vào field
+  `syncLog.<deviceId>` của `families/{code}` (không tốn thêm lượt ghi). Khi máy
+  lệch nhau: đọc doc qua Firestore REST API (đọc công khai bằng API key trong
+  `FIREBASE_CONFIG`) để xem máy nào lỗi gì. Máy không có `syncLog` = chạy code cũ.
 
 - **[30/09/2026] Cần user test trên điện thoại thật:** giao diện mới (sáng + tối),
   nút chuyển theme, bộ chọn icon ở các form **chưa bấm thử trên máy**: to-do, lịch

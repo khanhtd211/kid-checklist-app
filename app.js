@@ -2509,6 +2509,34 @@ function getSyncBase(){
 }
 function setSyncBase(data){ localStorage.setItem(SYNC_BASE_KEY, JSON.stringify(data)); }
 function clearSyncBase(){ localStorage.removeItem(SYNC_BASE_KEY); }
+// Log chẩn đoán đồng bộ — CHẠY NGẦM, KHÔNG hiện ra giao diện (user không muốn thấy).
+// Mỗi máy tự ghi tình trạng của mình, rồi gửi KÈM trong lần đẩy dữ liệu bình thường
+// (không tốn thêm lượt ghi Firebase) vào field syncLog.<deviceId> của document gia
+// đình — mỗi máy chỉ ghi đè phần của riêng nó. Khi 2 máy lệch nhau, đọc field này
+// trên Firestore để biết máy nào mất kết nối/lỗi gì. Máy không có syncLog = đang
+// chạy code cũ (trước 03/10/2026).
+const SYNC_DEVICE_KEY = 'kidChecklistDeviceId_v1';
+const SYNC_DIAG_KEY = 'kidChecklistSyncDiag_v1';
+function syncDeviceId(){
+  let id = localStorage.getItem(SYNC_DEVICE_KEY);
+  if(!id){ id = uid('d'); localStorage.setItem(SYNC_DEVICE_KEY, id); }
+  return id;
+}
+function getSyncDiag(){
+  try{ return JSON.parse(localStorage.getItem(SYNC_DIAG_KEY)) || {}; }
+  catch(e){ return {}; }
+}
+function noteSyncDiag(patch, error){
+  try{
+    const d = Object.assign(getSyncDiag(), patch);
+    if(error){
+      d.errors = [{ at: Date.now(), where: error.where, code: (error.err && error.err.code) || null,
+        msg: String((error.err && error.err.message) || error.err || '').slice(0, 200) }]
+        .concat(d.errors || []).slice(0, 10);
+    }
+    localStorage.setItem(SYNC_DIAG_KEY, JSON.stringify(d));
+  }catch(e){}
+}
 
 /* ---------- Gộp dữ liệu 3 chiều (base / máy này / mây) ---------- */
 // activeProfileId là lựa chọn RIÊNG từng máy (iPad đang xem Múp, điện thoại đang xem
@@ -2662,9 +2690,12 @@ function pushToCloud(){
     pushed.updatedAt = Date.now();
     // merge:true — document còn chứa notifyTokens/notifySchedule (dữ liệu thông báo)
     // không thuộc về appData, không được xoá mỗi lần lưu.
-    tx.set(ref, { json: JSON.stringify(pushed), updatedAt: pushed.updatedAt }, { merge: true });
+    const diag = Object.assign(getSyncDiag(), { ua: navigator.userAgent.slice(0, 160), pushAt: pushed.updatedAt });
+    tx.set(ref, { json: JSON.stringify(pushed), updatedAt: pushed.updatedAt,
+      syncLog: { [syncDeviceId()]: diag } }, { merge: true });
   })).then(()=>{
     setSyncBase(pushed);
+    noteSyncDiag({ lastPushAt: Date.now() });
     // Trong lúc đang đẩy, máy này có thể vừa sửa thêm / vừa nhận bản mới -> gộp tiếp.
     const next = syncComparable(appData) === syncComparable(localAtPush)
       ? pushed : mergeAppData(localAtPush, appData, pushed);
@@ -2672,6 +2703,7 @@ function pushToCloud(){
     if(hasUnsyncedChanges()) syncPushAgain = true;
   }).catch(err=>{
     console.error('Đồng bộ lên mây lỗi', err);
+    noteSyncDiag({}, { where: 'push', err });
     syncRetryTimer = setTimeout(pushToCloud, 5000);
   }).finally(()=>{
     syncPushing = false;
@@ -2708,6 +2740,7 @@ function attachSyncListener(){
   clearTimeout(syncListenerRetryTimer);
   if(fbUnsub){ fbUnsub(); fbUnsub = null; }
   fbUnsub = ref.onSnapshot(snap=>{
+    if(!snap.metadata.fromCache) noteSyncDiag({ lastServerAt: Date.now() });
     if(!snap.exists || snap.metadata.hasPendingWrites) return;
     const remote = snap.data();
     if(!remote || !remote.json) return;
@@ -2719,18 +2752,22 @@ function attachSyncListener(){
       if(hasUnsyncedChanges()) schedulePush();
       return; // mây không có gì mới so với lần đồng bộ trước
     }
-    const next = hasUnsyncedChanges() ? mergeAppData(base, appData, remoteData) : remoteData;
+    const needMerge = hasUnsyncedChanges();
+    if(needMerge) noteSyncDiag({ mergeCount: (getSyncDiag().mergeCount || 0) + 1, lastMergeAt: Date.now() });
+    const next = needMerge ? mergeAppData(base, appData, remoteData) : remoteData;
     setSyncBase(remoteData);
     applySyncedData(next);
     if(hasUnsyncedChanges()) schedulePush();
   }, err=>{
     // Listener của Firestore chết hẳn sau khi báo lỗi -> tự gắn lại sau ít giây.
     console.error('Lỗi lắng nghe đồng bộ', err);
+    noteSyncDiag({}, { where: 'listen', err });
     syncListenerRetryTimer = setTimeout(attachSyncListener, 5000);
   });
 }
 function resyncNow(){
   if(!getSyncCode() || !fbDb) return;
+  noteSyncDiag({ lastResumeAt: Date.now() });
   attachSyncListener();
   schedulePush();
 }
