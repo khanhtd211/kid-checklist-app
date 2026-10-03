@@ -5,7 +5,20 @@
 
 ## Đã hoàn thành
 
-_(tính đến 30/09/2026)_
+_(tính đến 03/10/2026)_
+
+- **[03/10/2026] Fix đồng bộ nhiều máy: gộp thay đổi thay vì ghi đè** (`a07a203`).
+  Bug thật: iPad + điện thoại cùng mở 1 bé, mỗi máy tick việc khác nhau → 2 máy
+  lệch hẳn, mất tick/mất việc mới thêm (Thứ 5 mất checklist, việc "Ăn tối xong
+  trước 19h30" biến mất). Đã kiểm tra trực tiếp Firestore: Firebase bình thường
+  (không hết quota, doc ~31KB), bản trên mây là của điện thoại, việc tick trên
+  iPad bị ghi đè. Nguyên nhân: đồng bộ nguyên khối "ghi sau thắng" + listener
+  iPad có thể "đứng" sau khi nằm nền lâu (chưa chứng minh 100%, không có log iPad).
+  Cách fix: mỗi máy lưu "bản gốc" (`kidChecklistSyncBase_v1`), đẩy lên bằng
+  transaction + gộp 3 chiều (`mergeAppData`/`merge3`), sao & ❄️ tính lại theo
+  `starHistory`/`frozenDays` để không cộng/trừ 2 lần, gắn lại listener khi mở app
+  từ nền/online, tự thử lại khi lỗi. Fix trước đó (`3b9c482`, cờ PENDING_PUSH)
+  sai hướng, đã bỏ hoàn toàn.
 
 - **[30/09/2026] Giao diện mới phong cách trẻ em** (`a1dd98a`): nền kem hoạ tiết
   pastel chấm bi, font Nunito (Google Fonts, có tiếng Việt), thẻ việc màu pastel
@@ -322,6 +335,12 @@ bằng browser pane giả lập iPhone; chờ user test trên điện thoại th
 
 ## Quyết định kỹ thuật quan trọng
 
+- **[03/10/2026] Bé đang chọn (`activeProfileId`) là lựa chọn RIÊNG từng máy,
+  không đồng bộ.** User đã xác nhận giữ kiểu mới. Trước đây đổi bé trên điện thoại
+  thì iPad đổi theo (tác dụng phụ của đồng bộ nguyên khối) → bé dùng iPad dễ bị
+  nhảy hồ sơ, tick nhầm. Field vẫn nằm trong `appData` nhưng bị bỏ qua khi so
+  sánh/gộp (`syncComparable`, `applySyncedData`).
+
 - **[30/09/2026] Giữ GitHub Pages, không chuyển Firebase Hosting/Vercel.** Lý do:
   app tĩnh, Pages đủ dùng; đổi domain sẽ mất `localStorage` trên máy chưa bật sync,
   phải cài lại icon Home Screen và đăng ký lại FCM token. Nếu sau này muốn đồng bộ
@@ -395,6 +414,11 @@ bằng browser pane giả lập iPhone; chờ user test trên điện thoại th
   không ép `cache:'no-store'` ở tầng `fetch()`.
 
 ## Việc tồn đọng / Next steps
+
+- **[03/10/2026] Cần user xác nhận fix đồng bộ** trên cả điện thoại + iPad (phải
+  tắt hẳn app rồi mở lại cả 2 máy để lên bản v95). Đề xuất (chưa làm, chờ user):
+  thêm dòng trạng thái đồng bộ trong Cài đặt (lần đồng bộ cuối / lỗi) để chẩn
+  đoán nếu iPad lại lệch.
 
 - **[30/09/2026] Cần user test trên điện thoại thật:** giao diện mới (sáng + tối),
   nút chuyển theme, bộ chọn icon ở các form **chưa bấm thử trên máy**: to-do, lịch
