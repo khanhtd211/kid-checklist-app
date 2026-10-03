@@ -201,7 +201,14 @@ function loadAppData(){
 
 function saveAppData(){
   localStorage.setItem(STORAGE_KEY, JSON.stringify(appData));
-  if(getSyncCode()) schedulePush();
+  if(getSyncCode()){
+    // Chỉ bật cờ "còn thay đổi chưa đẩy lên" khi máy đã từng đồng bộ xong ít nhất 1
+    // lần (syncReady) — giữ nguyên hành vi cũ cho khoảnh khắc vừa mở app, máy đang
+    // chờ bản mới nhất từ mây lần đầu (xem comment dài ở pushToCloud() giải thích
+    // đúng race condition đó), tránh đẩy ngược bản cũ của máy này đè lên máy khác.
+    if(syncReady) localStorage.setItem(PENDING_PUSH_KEY, '1');
+    schedulePush();
+  }
 }
 
 function normalizeAppData(){
@@ -2489,6 +2496,15 @@ const FIREBASE_CONFIG = {
   appId: "1:638904549868:web:700bb8b98ec82550c7c0c9"
 };
 const SYNC_CODE_KEY = 'kidChecklistSyncCode_v1';
+// Cờ riêng từng máy (KHÔNG nằm trong appData nên không bị cuốn theo dữ liệu đồng bộ):
+// bật lên mỗi khi máy này vừa lưu thay đổi nhưng CHƯA chắc đã đẩy lên mây thành công
+// (lưu ở localStorage nên sống sót qua việc tắt/mở lại app) — xem saveAppData() +
+// onSnapshot() trong startSyncListener(). Fix bug thật: bé tick xong việc rồi tắt
+// app/khoá máy ngay lập tức (rất hay gặp), lúc đó lần đẩy lên mây (debounce 800ms)
+// bị huỷ giữa chừng và KHÔNG tự thử lại — nếu không có cờ này, lần mở app kế tiếp
+// (hoặc máy khác) sẽ tải bản cũ từ mây về và ghi đè mất luôn phần vừa tick/vừa thêm,
+// dù phần đó đã lưu đúng trong localStorage.
+const PENDING_PUSH_KEY = 'kidChecklistPendingPush_v1';
 let fbApp = null, fbDb = null, fbUnsub = null, syncPushTimer = null, syncApplyingRemote = false;
 // true khi đã nhận được snapshot ĐẦU TIÊN từ Firestore kể từ lần gọi
 // startSyncListener() gần nhất — xem giải thích chi tiết ở pushToCloud().
@@ -2544,7 +2560,13 @@ function pushToCloud(){
   appData.updatedAt = Date.now();
   // merge:true — không được ghi đè cả document, vì document còn chứa notifyTokens/notifySchedule
   // (dữ liệu thông báo) không thuộc về appData và không được phép bị xoá mỗi lần lưu.
-  ref.set({ json: JSON.stringify(appData), updatedAt: appData.updatedAt }, { merge: true }).catch(err=>{
+  ref.set({ json: JSON.stringify(appData), updatedAt: appData.updatedAt }, { merge: true }).then(()=>{
+    // Đẩy thành công -> tắt cờ "còn thay đổi chưa đẩy lên" (xem PENDING_PUSH_KEY).
+    // Có thể có thay đổi mới hơn phát sinh ngay trong lúc đang đẩy (hiếm, vài trăm
+    // ms) chưa kịp gộp vào lần này -> chấp nhận, lần saveAppData() kế tiếp sẽ tự
+    // bật cờ lại và lên lịch đẩy tiếp bình thường.
+    localStorage.removeItem(PENDING_PUSH_KEY);
+  }).catch(err=>{
     console.error('Đồng bộ lên mây lỗi', err);
   });
 }
@@ -2566,6 +2588,15 @@ function startSyncListener(){
     if(!snap.exists) return;
     const remote = snap.data();
     if(!remote || !remote.json) return;
+    // Máy này còn thay đổi local chưa chắc đã đẩy lên mây (VD vừa tick việc/thêm việc
+    // xong thì tắt app ngay, lần đẩy debounce 800ms bị huỷ giữa chừng) -> TUYỆT ĐỐI
+    // không nhận bản từ mây đè lên kẻo mất đúng phần đó, dù bản mây có updatedAt mới
+    // hơn (updatedAt của máy này chỉ cập nhật lúc đẩy THÀNH CÔNG, không phản ánh đúng
+    // lúc sửa). Chủ động đẩy lại thay vì nhận, để phần còn thiếu chắc chắn lên mây.
+    if(localStorage.getItem(PENDING_PUSH_KEY)){
+      schedulePush();
+      return;
+    }
     if(remote.updatedAt && remote.updatedAt <= (appData.updatedAt || 0)) return;
     try{
       syncApplyingRemote = true;
@@ -2591,6 +2622,7 @@ function createSyncCodeFlow(){
   if(!initFirebase()){ alert('Không tải được thư viện đồng bộ. Kiểm tra kết nối mạng rồi thử lại nhé.'); return; }
   const code = genSyncCode();
   setSyncCode(code);
+  localStorage.removeItem(PENDING_PUSH_KEY); // cờ của mã đồng bộ cũ (nếu có) không còn liên quan
   appData.updatedAt = Date.now();
   syncDocRef().set({ json: JSON.stringify(appData), updatedAt: appData.updatedAt })
     .then(()=>{
@@ -2618,6 +2650,7 @@ function joinSyncCodeFlow(){
     try{
       appData = JSON.parse(snap.data().json);
       setSyncCode(code);
+      localStorage.removeItem(PENDING_PUSH_KEY); // vừa thay toàn bộ = bản mây đã là bản đúng
       normalizeAppData();
       localStorage.setItem(STORAGE_KEY, JSON.stringify(appData));
       startSyncListener();
@@ -2636,6 +2669,7 @@ function stopSyncFlow(){
   if(!confirm('Ngừng đồng bộ? Dữ liệu trên máy này vẫn được giữ nguyên, chỉ không còn tự động cập nhật qua các thiết bị khác nữa.')) return;
   if(fbUnsub){ fbUnsub(); fbUnsub = null; }
   clearSyncCode();
+  localStorage.removeItem(PENDING_PUSH_KEY);
   renderSyncSettings();
 }
 
