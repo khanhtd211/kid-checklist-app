@@ -2497,6 +2497,15 @@ const SYNC_CODE_KEY = 'kidChecklistSyncCode_v1';
 // khác nhau -> trước đây máy nào đẩy sau thì xoá mất việc máy kia vừa tick, có lúc
 // 2 máy còn lệch nhau hẳn (máy tick "Đọc sách", máy kia tick "Dọn bàn học").
 const SYNC_BASE_KEY = 'kidChecklistSyncBase_v1';
+// Bản đồng bộ kiểu GỘP (từ 03/10/2026) đọc/ghi dữ liệu ở field RIÊNG `json2`/
+// `updatedAt2` của document gia đình — tách hẳn khỏi `json`/`updatedAt` mà bản code
+// CŨ (ghi đè nguyên khối) vẫn dùng. Fix bug thật 04/10: 1 máy chưa tắt app từ hôm
+// trước (vẫn chạy code cũ trong bộ nhớ) ghi đè bản cũ của nó lên `json`, các máy bản
+// mới tưởng là thay đổi hợp lệ nên chấp nhận theo -> mất tick cả ngày. Giờ máy code
+// cũ ghi gì cũng không ảnh hưởng; khi nó được mở lại (lên bản mới, chưa có bản gốc)
+// thì dữ liệu riêng của nó được gộp hợp vào, không xoá gì. Chỉ đọc `json` khi
+// `json2` chưa tồn tại (lần đầu chuyển đổi).
+function remoteJsonOf(data){ return data ? (data.json2 || data.json || null) : null; }
 let fbApp = null, fbDb = null, fbUnsub = null, syncPushTimer = null;
 let syncPushing = false, syncPushAgain = false, syncRetryTimer = null, syncListenerRetryTimer = null;
 
@@ -2685,13 +2694,14 @@ function pushToCloud(){
   const base = getSyncBase();
   let pushed = null;
   fbDb.runTransaction(tx => tx.get(ref).then(snap=>{
-    const remoteJson = snap.exists && snap.data() ? snap.data().json : null;
+    const remoteJson = snap.exists ? remoteJsonOf(snap.data()) : null;
     pushed = remoteJson ? mergeAppData(base, localAtPush, JSON.parse(remoteJson)) : cloneJson(localAtPush);
     pushed.updatedAt = Date.now();
     // merge:true — document còn chứa notifyTokens/notifySchedule (dữ liệu thông báo)
     // không thuộc về appData, không được xoá mỗi lần lưu.
-    const diag = Object.assign(getSyncDiag(), { ua: navigator.userAgent.slice(0, 160), pushAt: pushed.updatedAt });
-    tx.set(ref, { json: JSON.stringify(pushed), updatedAt: pushed.updatedAt,
+    const diag = Object.assign(getSyncDiag(), { ua: navigator.userAgent.slice(0, 160), pushAt: pushed.updatedAt,
+      touch: navigator.maxTouchPoints || 0, screen: `${screen.width}x${screen.height}` }); // iPad cũng báo UA "Macintosh" -> phân biệt bằng cảm ứng/màn hình
+    tx.set(ref, { json2: JSON.stringify(pushed), updatedAt2: pushed.updatedAt,
       syncLog: { [syncDeviceId()]: diag } }, { merge: true });
   })).then(()=>{
     setSyncBase(pushed);
@@ -2743,9 +2753,9 @@ function attachSyncListener(){
     if(!snap.metadata.fromCache) noteSyncDiag({ lastServerAt: Date.now() });
     if(!snap.exists || snap.metadata.hasPendingWrites) return;
     const remote = snap.data();
-    if(!remote || !remote.json) return;
+    if(!remoteJsonOf(remote)) return;
     let remoteData;
-    try{ remoteData = JSON.parse(remote.json); }
+    try{ remoteData = JSON.parse(remoteJsonOf(remote)); }
     catch(e){ console.error('Không đọc được dữ liệu đồng bộ', e); return; }
     const base = getSyncBase();
     if(base && syncComparable(remoteData) === syncComparable(base)){
@@ -2777,6 +2787,19 @@ document.addEventListener('visibilitychange', ()=>{
   else if(hasUnsyncedChanges()){ clearTimeout(syncPushTimer); pushToCloud(); } // sắp tắt/ẩn app: đẩy ngay
 });
 window.addEventListener('online', resyncNow);
+// Nhiều tab cùng 1 trình duyệt dùng chung localStorage (cả "bản gốc" đồng bộ) nhưng
+// appData trong bộ nhớ thì riêng — tab nằm im giữ bản cũ, lỡ lưu sẽ bị hiểu là "xoá"
+// những gì tab kia vừa thêm. Tab khác vừa lưu -> nạp lại ngay bản mới nhất.
+window.addEventListener('storage', e=>{
+  if(e.key !== STORAGE_KEY || !e.newValue) return;
+  try{
+    const keepActive = appData && appData.activeProfileId;
+    appData = JSON.parse(e.newValue);
+    if(keepActive && (appData.profiles || []).some(p=>p.id===keepActive)) appData.activeProfileId = keepActive;
+    normalizeAppData();
+    renderAll(); // không ghi lại localStorage ở đây, tránh 2 tab bắn qua lại mãi
+  }catch(err){}
+});
 window.addEventListener('pageshow', e=>{ if(e.persisted) resyncNow(); });
 
 function createSyncCodeFlow(){
@@ -2785,7 +2808,7 @@ function createSyncCodeFlow(){
   const code = genSyncCode();
   setSyncCode(code);
   appData.updatedAt = Date.now();
-  syncDocRef().set({ json: JSON.stringify(appData), updatedAt: appData.updatedAt })
+  syncDocRef().set({ json2: JSON.stringify(appData), updatedAt2: appData.updatedAt })
     .then(()=>{
       setSyncBase(appData);
       startSyncListener();
@@ -2805,12 +2828,12 @@ function joinSyncCodeFlow(){
   if(!confirm('Kết nối sẽ TẢI dữ liệu từ mã này về và THAY THẾ toàn bộ dữ liệu hiện có trên máy này. Chắc chắn tiếp tục?')) return;
   if(!initFirebase()){ alert('Không tải được thư viện đồng bộ. Kiểm tra kết nối mạng rồi thử lại nhé.'); return; }
   fbDb.collection('families').doc(code).get().then(snap=>{
-    if(!snap.exists || !snap.data() || !snap.data().json){
+    if(!snap.exists || !remoteJsonOf(snap.data())){
       alert('Không tìm thấy mã đồng bộ này. Kiểm tra lại mã nhé.');
       return;
     }
     try{
-      appData = JSON.parse(snap.data().json);
+      appData = JSON.parse(remoteJsonOf(snap.data()));
       setSyncCode(code);
       setSyncBase(appData); // vừa thay toàn bộ bằng bản mây -> đây chính là bản gốc
       normalizeAppData();

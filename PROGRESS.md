@@ -5,7 +5,20 @@
 
 ## Đã hoàn thành
 
-_(tính đến 03/10/2026)_
+_(tính đến 04/10/2026)_
+
+- **[04/10/2026] Cô lập máy chạy code cũ khỏi dữ liệu đồng bộ** (field `json2`/
+  `updatedAt2`). Bug thật: Múp tick 6/8 việc lúc ~19h, tối mở Mac Chrome thấy mất
+  hết + mất vài tick hôm qua. Log `syncLog` cho thấy 3 máy đã lên bản mới (iPhone,
+  Mac Chrome, 1 máy UA "Mac Safari" — có thể là iPad vì iPad báo UA Macintosh),
+  không lỗi → nhiều khả năng 1 máy chưa tắt app từ hôm trước (vẫn chạy code cũ
+  trong bộ nhớ, không gửi syncLog) ghi đè nguyên khối lên `json`, các máy bản mới
+  coi là thay đổi hợp lệ nên nhận theo. Fix: bản mới chỉ đọc/ghi `json2` (đọc
+  `json` khi `json2` chưa có), máy code cũ ghi gì cũng không ảnh hưởng; khi được
+  mở lại lên bản mới thì dữ liệu riêng của nó gộp hợp vào. `send-reminders.js`
+  đọc `json2 || json`. Thêm `touch`/`screen` vào syncLog để phân biệt iPad/Mac;
+  đồng bộ appData giữa nhiều tab cùng trình duyệt (sự kiện `storage`). User hỏi có
+  phải do theme mới không → KHÔNG (commit theme chỉ đổi CSS/màu/font).
 
 - **[03/10/2026] Fix đồng bộ nhiều máy: gộp thay đổi thay vì ghi đè** (`a07a203`).
   Bug thật: iPad + điện thoại cùng mở 1 bé, mỗi máy tick việc khác nhau → 2 máy

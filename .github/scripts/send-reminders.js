@@ -234,7 +234,10 @@ async function run() {
     }
 
     let appData = null;
-    try { appData = data.json ? JSON.parse(data.json) : null; } catch (e) { appData = null; }
+    // json2 = dữ liệu của app bản đồng bộ gộp (từ 03/10/2026); json = bản code cũ, chỉ
+    // dùng khi gia đình chưa có máy nào lên bản mới (xem remoteJsonOf() trong app.js).
+    const raw = data.json2 || data.json;
+    try { appData = raw ? JSON.parse(raw) : null; } catch (e) { appData = null; }
     if (!appData) { continue; }
 
     // ----- Phần checklist (giữ nguyên hành vi cũ) -----
