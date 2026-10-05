@@ -1256,7 +1256,7 @@ function renderStats(){
   tbody.innerHTML = '';
   p.tasks.forEach(t=>{
     const tr = document.createElement('tr');
-    let cells = `<td class="taskname">${t.emoji} ${escapeHtml(t.title)}</td>`;
+    let cells = `<td class="taskname" title="${escapeHtml(t.title)}">${t.emoji} ${escapeHtml(t.title)}</td>`;
     weekDays.forEach(d=>{
       const wd = weekdayOf(d);
       const key = toKey(d);

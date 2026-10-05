@@ -254,10 +254,13 @@ input,select,textarea{font-family:inherit;}
 
 /* Stats */
 .card{background:var(--card);border-radius:var(--radius);padding:16px;margin-bottom:14px;box-shadow:var(--shadow);border:2px solid var(--line);}
-.week-grid{width:100%;border-collapse:collapse;font-size:13px;}
+/* Khung cố định vừa 1 màn hình: cột tên việc chiếm cố định, tên dài thì cắt "..."
+   (không để tên dài đẩy bảng rộng ra phải kéo thanh trượt ngang). */
+.week-grid{width:100%;border-collapse:collapse;font-size:13px;table-layout:fixed;}
 .week-grid th,.week-grid td{text-align:center;padding:6px 2px;}
 .week-grid th{color:var(--muted);font-weight:600;}
-.week-grid td.taskname{text-align:left;font-weight:600;white-space:nowrap;font-size:13px;}
+.week-grid th:first-child{width:44%;}
+.week-grid td.taskname{text-align:left;font-weight:600;white-space:nowrap;font-size:13px;overflow:hidden;text-overflow:ellipsis;}
 .week-grid .mark{font-size:16px;}
 .week-grid td.editable-cell{cursor:pointer;border-radius:8px;}
 .week-grid td.editable-cell:active{background:#f0f0f0;}
