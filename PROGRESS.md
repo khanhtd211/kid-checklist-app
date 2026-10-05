@@ -428,8 +428,10 @@ bằng browser pane giả lập iPhone; chờ user test trên điện thoại th
 
 ## Việc tồn đọng / Next steps
 
-- **[03/10/2026] Cần user xác nhận fix đồng bộ** trên cả điện thoại + iPad (phải
-  tắt hẳn app rồi mở lại cả 2 máy để lên bản v95). Đã đề xuất thêm dòng trạng
+- ~~**[03/10/2026] Cần user xác nhận fix đồng bộ**~~ → **user xác nhận ổn (06/10/2026)**
+  sau bản cô lập `json2` (04/10). Nguyên nhân user tự tổng kết, khớp phân tích: máy
+  để mở lâu (code cũ) đẩy nguyên khối dữ liệu cũ lên mà không lấy bản mới từ
+  server trước → ghi đè dữ liệu mới. Đã đề xuất thêm dòng trạng
   thái đồng bộ trong Cài đặt (lần đồng bộ cuối / lỗi) — **user quyết định KHÔNG
   làm** (03/10), không đề xuất lại. User muốn đồng bộ chạy ngầm hoàn toàn, KHÔNG
   hiện gì liên quan đồng bộ trên giao diện người dùng.
