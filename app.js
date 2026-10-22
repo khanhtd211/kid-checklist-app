@@ -2449,6 +2449,9 @@ function saveProfileModal(){
 
 /* ---------- Tabs ---------- */
 function switchTab(name){
+  // Đổi trang/đổi bé (chọn bé xong cũng gọi switchTab('today')) -> dùng ❄️ cho ngày
+  // lỡ quên nếu cần, TRƯỚC khi vẽ streak. Hàm idempotent nên gọi nhiều lần không sao.
+  applyStreakFreezes();
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.getElementById('page-'+name).classList.add('active');
   document.querySelectorAll('.tabbar button').forEach(b=>b.classList.toggle('active', b.dataset.tab===name));
@@ -2781,6 +2784,11 @@ function resyncNow(){
   attachSyncListener();
   schedulePush();
 }
+// App để mở qua đêm rồi mở lại từ nền (không tải lại trang): vẽ lại để sang đúng ngày
+// mới + dùng ❄️ cho hôm qua nếu bé lỡ quên.
+document.addEventListener('visibilitychange', ()=>{
+  if(document.visibilityState === 'visible') renderAll();
+});
 document.addEventListener('visibilitychange', ()=>{
   if(!getSyncCode() || !fbDb) return;
   if(document.visibilityState === 'visible') resyncNow();
@@ -3137,7 +3145,10 @@ if(darkMediaQuery){
 }
 
 document.addEventListener('DOMContentLoaded', ()=>{
-  renderToday();
+  // renderAll() (không phải chỉ renderToday()) để ❄️ Đóng băng streak được dùng ngay
+  // lúc mở app — fix bug thật 22/10: Nhộng có sẵn ❄️ nhưng mở app vẫn mất streak hôm
+  // qua, vì applyStreakFreezes() chỉ nằm trong renderAll() mà lúc mở app không gọi.
+  renderAll();
 
   document.getElementById('emojiPickerCloseBtn').addEventListener('click', closeEmojiPickerModal);
   document.getElementById('emojiPickerModal').addEventListener('click', (e)=>{
