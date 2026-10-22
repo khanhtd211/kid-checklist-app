@@ -15,7 +15,8 @@ _(tính đến 22/10/2026)_
   `renderAll()` mỗi lần nhận dữ liệu; bản đồng bộ gộp chỉ render khi dữ liệu đổi.
   Fix: `DOMContentLoaded` gọi `renderAll()`, `switchTab()` gọi `applyStreakFreezes()`,
   thêm `renderAll()` khi app mở lại từ nền (qua đêm sang ngày mới). Đã verify bằng
-  dữ liệu thật của Nhộng (streak giữ 26 ngày).
+  dữ liệu thật của Nhộng (streak giữ 26 ngày). **User đã xác nhận trên máy thật:
+  mở lại app, streak Nhộng về 26 ngày (22/10).**
 
 - **[04/10/2026] Cô lập máy chạy code cũ khỏi dữ liệu đồng bộ** (field `json2`/
   `updatedAt2`). Bug thật: Múp tick 6/8 việc lúc ~19h, tối mở Mac Chrome thấy mất
