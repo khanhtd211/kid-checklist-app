@@ -5,7 +5,18 @@
 
 ## Đã hoàn thành
 
-_(tính đến 22/10/2026)_
+_(tính đến 25/11/2026)_
+
+- **[25/11/2026] Fix đổi phiếu quà không trừ sao rồi trừ gấp đôi.** Bug thật: Múp
+  11 sao đổi phiếu 10 sao, app vẫn hiện 11 sao; đổi lại lần nữa thì về 0 sao + 2
+  phiếu. Nguyên nhân: Firestore bật cache offline, mỗi lần gắn lại listener (mở app
+  từ nền, có mạng lại...) nó trả ngay bản trong cache. Bản này có thể cũ hơn lần đổi
+  quà vì transaction ghi thẳng lên server, không cập nhật cache. Máy nhận bản cũ làm
+  dữ liệu + bản gốc nên quay về 11 sao; lần đổi sau gộp với bản thật trên mây thành
+  11 − 10 − 10, chặn ở 0. Đã tái hiện bằng `mergeAppData` ra đúng 0 sao / 2 phiếu.
+  Fix: mỗi lần đẩy ghi `syncRev` tăng dần (trong transaction), listener bỏ qua bản
+  có `syncRev` nhỏ hơn bản gốc. Dữ liệu Múp cần chỉnh tay: "↩️ Hoàn sao" 1 phiếu thừa
+  (+10 → 10 sao) rồi thu hồi 9 sao → đúng 1 sao, 1 phiếu.
 
 - **[22/10/2026] Fix ❄️ Đóng băng streak không tự dùng khi mở app.** Bug thật: Nhộng
   mua ❄️ tối 21/10, hôm sau quên to-do ngày 21 nhưng mở app vẫn mất streak (26

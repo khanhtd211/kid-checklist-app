@@ -2558,6 +2558,7 @@ function syncComparable(d){
   const c = Object.assign({}, d);
   delete c.updatedAt;
   delete c.activeProfileId;
+  delete c.syncRev;
   return JSON.stringify(c);
 }
 function hasUnsyncedChanges(){
@@ -2698,8 +2699,12 @@ function pushToCloud(){
   let pushed = null;
   fbDb.runTransaction(tx => tx.get(ref).then(snap=>{
     const remoteJson = snap.exists ? remoteJsonOf(snap.data()) : null;
-    pushed = remoteJson ? mergeAppData(base, localAtPush, JSON.parse(remoteJson)) : cloneJson(localAtPush);
+    const remoteNow = remoteJson ? JSON.parse(remoteJson) : null;
+    pushed = remoteNow ? mergeAppData(base, localAtPush, remoteNow) : cloneJson(localAtPush);
     pushed.updatedAt = Date.now();
+    // Số phiên bản tăng dần mỗi lần ghi (transaction nên không 2 máy nào trùng) —
+    // listener dùng để nhận ra bản CŨ HƠN bản gốc và bỏ qua (xem attachSyncListener).
+    pushed.syncRev = ((remoteNow && remoteNow.syncRev) || 0) + 1;
     // merge:true — document còn chứa notifyTokens/notifySchedule (dữ liệu thông báo)
     // không thuộc về appData, không được xoá mỗi lần lưu.
     const diag = Object.assign(getSyncDiag(), { ua: navigator.userAgent.slice(0, 160), pushAt: pushed.updatedAt,
@@ -2761,6 +2766,17 @@ function attachSyncListener(){
     try{ remoteData = JSON.parse(remoteJsonOf(remote)); }
     catch(e){ console.error('Không đọc được dữ liệu đồng bộ', e); return; }
     const base = getSyncBase();
+    // Bỏ qua bản CŨ HƠN bản gốc — fix bug thật 25/11: Múp 11 sao đổi phiếu 10 sao,
+    // app vẫn hiện 11 sao; đổi thêm lần nữa thì về 0 sao + 2 phiếu. Nguyên nhân:
+    // Firestore bật cache offline (enablePersistence), mỗi lần gắn lại listener (mở
+    // app từ nền, có mạng lại...) nó trả NGAY bản trong cache — có thể là bản TRƯỚC
+    // lần đổi quà (transaction ghi thẳng lên server, không cập nhật cache). Máy coi
+    // đó là "dữ liệu mới từ mây" nên quay về 11 sao + nhận bản cũ làm bản gốc; lần
+    // đổi sau gộp với bản thật trên mây -> tính 11 - 10 - 10, chặn ở 0.
+    if(base && (remoteData.syncRev || 0) < (base.syncRev || 0)){
+      if(hasUnsyncedChanges()) schedulePush();
+      return;
+    }
     if(base && syncComparable(remoteData) === syncComparable(base)){
       if(hasUnsyncedChanges()) schedulePush();
       return; // mây không có gì mới so với lần đồng bộ trước
